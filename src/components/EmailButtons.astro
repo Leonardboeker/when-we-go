@@ -1,0 +1,92 @@
+---
+// src/components/EmailButtons.astro
+// Inline "Add to Calendar" buttons rendered on the per-token page POST-CLOSE.
+// Same 4 services as the close-summary email; lets people add to calendar even
+// if they missed/lost the email.
+//
+// The buttons are wrapped in a `<div hidden data-add-to-calendar-buttons>`
+// container — the page's inline script reveals it once it knows the poll is
+// closed AND it has the overlap data needed to compute the URLs.
+//
+// We don't build the URLs at SSR time — the featured trip range depends on
+// runtime overlap data. Instead the buttons start with placeholder href="#"
+// and the script (in [token].astro) fills them in.
+---
+<div
+  class="add-to-calendar"
+  hidden
+  data-add-to-calendar-buttons
+>
+  <p class="add-to-calendar-label">Add to your calendar</p>
+  <div class="add-to-calendar-row">
+    <a href="#" target="_blank" rel="noopener" data-cal-google class="cal-btn cal-btn-google">Google</a>
+    <a href="#" target="_blank" rel="noopener" data-cal-apple class="cal-btn cal-btn-apple">Apple</a>
+    <a href="#" target="_blank" rel="noopener" data-cal-outlook class="cal-btn cal-btn-outlook">Outlook</a>
+    <a href="#" target="_blank" rel="noopener" data-cal-yahoo class="cal-btn cal-btn-yahoo">Yahoo</a>
+  </div>
+  <p class="add-to-calendar-note">
+    The .ics file works in any calendar app — clicking Apple downloads it.
+  </p>
+</div>
+
+<style>
+  .add-to-calendar {
+    margin: 16px 0 24px;
+    padding: 16px;
+    border: 3px solid var(--color-on-background, #1c1b1f);
+    background: var(--color-surface, #fff);
+    box-shadow: 3px 3px 0 var(--color-primary, #6750a4);
+  }
+  .add-to-calendar-label {
+    margin: 0 0 12px 0;
+    font-family: var(--font-label, 'JetBrains Mono', monospace);
+    font-size: 13px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-on-surface-variant, #666);
+  }
+  .add-to-calendar-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+  @media (max-width: 480px) {
+    .add-to-calendar-row {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+  .cal-btn {
+    display: block;
+    text-align: center;
+    padding: 12px 8px;
+    color: #fff;
+    text-decoration: none;
+    font-family: var(--font-label, 'JetBrains Mono', monospace);
+    font-weight: 700;
+    font-size: 13px;
+    border-radius: 4px;
+    border: 2px solid var(--color-on-background, #1c1b1f);
+  }
+  .cal-btn:hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 2px 2px 0 var(--color-on-background, #1c1b1f);
+  }
+  .cal-btn-google {
+    background: #4285f4;
+  }
+  .cal-btn-apple {
+    background: #555;
+  }
+  .cal-btn-outlook {
+    background: #0078d4;
+  }
+  .cal-btn-yahoo {
+    background: #6001d2;
+  }
+  .add-to-calendar-note {
+    margin: 10px 0 0 0;
+    font-size: 12px;
+    color: var(--color-on-surface-variant, #888);
+  }
+</style>

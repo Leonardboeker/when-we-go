@@ -8,6 +8,8 @@ import { polls, type Poll, type Participant } from '../../data/polls';
 import PollHeader from '../../components/PollHeader.astro';
 import CalendarGrid from '../../components/CalendarGrid.astro';
 import ProfileForm from '../../components/ProfileForm.astro';
+import EmailButtons from '../../components/EmailButtons.astro';
+import { buildICalDownloadUrl } from '../../lib/calendar-links';
 
 export const prerender = true;
 
@@ -40,6 +42,23 @@ const title = `Hey ${participant.name} — when can you ${poll.destination ? `co
 // same-origin (empty string) so the deployed Worker route handles /api/* paths.
 const publicApiBase =
   (import.meta.env.WHENWEGO_PUBLIC_API_BASE as string | undefined) ?? '';
+
+// Phase 8: absolute site URL for building add-to-calendar links. The
+// `WHENWEGO_PUBLIC_SITE_URL` build env wins; falls back to PUBLIC_SITE_URL
+// (the existing Astro convention), then localhost for dev. Trailing slash
+// stripped so we can concatenate paths cleanly.
+const publicSiteUrl = (
+  (import.meta.env.WHENWEGO_PUBLIC_SITE_URL as string | undefined) ??
+  (import.meta.env.PUBLIC_SITE_URL as string | undefined) ??
+  'http://localhost:4321'
+).replace(/\/$/, '');
+
+// Pre-build the .ics download URL at SSR time — it's the only add-to-calendar
+// URL that doesn't depend on the overlap, so it's safe to bake in.
+const icalDownloadUrl = buildICalDownloadUrl({
+  siteUrl: publicSiteUrl,
+  slug: poll.slug,
+});
 ---
 
 <BaseLayout
@@ -62,6 +81,10 @@ const publicApiBase =
     <div id="poll-summary-banner" class="poll-summary-banner" hidden>
       <span data-summary-text></span>
     </div>
+
+    {/* Phase 8: post-close add-to-calendar buttons. Hidden until JS confirms
+        close + computes URLs from the overlap's featured range. */}
+    <EmailButtons />
 
     {/* Phase 4: profile gate. SSR renders the form hidden; the page IIFE either
         reveals it (profile incomplete) or hides it for good (profile complete)
@@ -89,6 +112,9 @@ const publicApiBase =
       apiBase: publicApiBase,
       dateRangeStartIn: poll.dateRangeStart,
       dateRangeEndIn: poll.dateRangeEnd,
+      pollTitle: poll.title,
+      pollDestination: poll.destination ?? poll.title,
+      icalDownloadUrl,
     }}
   >
   (function () {
@@ -405,9 +431,90 @@ const publicApiBase =
             else if (oneShort.has(d)) applyOverlapBadge(cell, 'oneShort');
           });
           renderSummaryBanner(overlap);
+          renderAddToCalendarButtons(overlap);
         }
         setStatus('poll closed');
       }
+    }
+
+    // Phase 8: build add-to-calendar URLs from the featured trip range and
+    // reveal the inline button block. Skipped if the calendar block isn't in
+    // the DOM (defensive — older SSR cache).
+    function addDaysIso(iso, days) {
+      const parts = iso.split('-').map(Number);
+      const dt = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+      dt.setUTCDate(dt.getUTCDate() + days);
+      const y = dt.getUTCFullYear();
+      const m = String(dt.getUTCMonth() + 1).padStart(2, '0');
+      const d = String(dt.getUTCDate()).padStart(2, '0');
+      return y + '-' + m + '-' + d;
+    }
+    function packCompactDate(iso) {
+      return iso.replace(/-/g, '') + 'T000000Z';
+    }
+    function packIsoDate(iso) {
+      return iso + 'T00:00:00Z';
+    }
+    function buildCalUrls(featured) {
+      const startIso = featured ? featured.start : dateRangeStartIn;
+      const endIncIso = featured ? featured.end : dateRangeEndIn;
+      const endExclIso = addDaysIso(endIncIso, 1);
+      const description = 'See your trip page for full details.';
+      const location = pollDestination;
+      const title = pollTitle;
+      const datesCompact = packCompactDate(startIso) + '/' + packCompactDate(endExclIso);
+      const google =
+        'https://calendar.google.com/calendar/render?' +
+        new URLSearchParams({
+          action: 'TEMPLATE',
+          text: title,
+          dates: datesCompact,
+          details: description,
+          location: location,
+        }).toString();
+      const outlook =
+        'https://outlook.live.com/calendar/0/deeplink/compose?' +
+        new URLSearchParams({
+          path: '/calendar/action/compose',
+          rru: 'addevent',
+          subject: title,
+          startdt: packIsoDate(startIso),
+          enddt: packIsoDate(endExclIso),
+          body: description,
+          location: location,
+          allday: 'true',
+        }).toString();
+      const yahoo =
+        'https://calendar.yahoo.com/?' +
+        new URLSearchParams({
+          v: '60',
+          title: title,
+          st: packCompactDate(startIso),
+          et: packCompactDate(endExclIso),
+          desc: description,
+          in_loc: location,
+        }).toString();
+      return { google, outlook, yahoo, apple: icalDownloadUrl };
+    }
+    function renderAddToCalendarButtons(overlap) {
+      const container = document.querySelector('[data-add-to-calendar-buttons]');
+      if (!container) return;
+      const ranges = (overlap && overlap.ranges) || [];
+      const featured =
+        ranges.find((r) => r.tier === 'perfect') ||
+        ranges.find((r) => r.tier === 'withEffort') ||
+        ranges[0] ||
+        null;
+      const urls = buildCalUrls(featured);
+      const gEl = container.querySelector('[data-cal-google]');
+      const aEl = container.querySelector('[data-cal-apple]');
+      const oEl = container.querySelector('[data-cal-outlook]');
+      const yEl = container.querySelector('[data-cal-yahoo]');
+      if (gEl) gEl.setAttribute('href', urls.google);
+      if (aEl) aEl.setAttribute('href', urls.apple);
+      if (oEl) oEl.setAttribute('href', urls.outlook);
+      if (yEl) yEl.setAttribute('href', urls.yahoo);
+      container.hidden = false;
     }
 
     /** @param {any} overlap */

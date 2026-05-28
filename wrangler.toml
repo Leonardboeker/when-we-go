@@ -34,7 +34,11 @@ crons = ["0 * * * *"]
 
 [vars]
 # Phase marker — flipped by the prebuild scripts of each phase.
-WHENWEGO_PHASE = "2"
+WHENWEGO_PHASE = "8"
+# Default absolute site URL used to build links inside outbound emails.
+# In production, override via `wrangler secret put WHENWEGO_SITE_URL` with the
+# real domain (e.g. https://when.your-domain.com). Local dev default below.
+WHENWEGO_SITE_URL = "http://localhost:4321"
 
 # ────────────────────────────────────────────────────────────────────────────
 # Secrets — set via: npx wrangler secret put <NAME>
@@ -43,4 +47,6 @@ WHENWEGO_PHASE = "2"
 #   WHENWEGO_POLLS_JSON           JSON-stringified array of poll objects
 #   WHENWEGO_TELEGRAM_BOT_TOKEN   Optional — bot token from @BotFather
 #   WHENWEGO_TELEGRAM_CHAT_ID     Optional — chat id that receives notifications
+#   WHENWEGO_RESEND_API_KEY       Optional — Resend.com API key for emails
+#   WHENWEGO_RESEND_FROM          Optional — sender, e.g. "team <hello@you.com>"
 # ────────────────────────────────────────────────────────────────────────────

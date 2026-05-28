@@ -64,6 +64,12 @@ async function fetchJson(url, opts) {
   return { status: res.status, json, text };
 }
 
+async function fetchRaw(url, opts) {
+  const res = await fetch(url, opts);
+  const text = await res.text();
+  return { status: res.status, text, headers: res.headers };
+}
+
 const started = Date.now();
 console.log(`\n[smoke] BASE=${BASE} SLUG=${SLUG}`);
 console.log(`[smoke] participants: ${PARTICIPANTS.length || 'NONE (set SMOKE_TOKENS)'}`);
@@ -72,11 +78,12 @@ console.log('');
 
 // (1) Health
 console.log('(1) Health:');
-await check('GET /api/health -> 200 { ok:true, phase:2 }', async () => {
+await check('GET /api/health -> 200 { ok:true, phase:>=2 }', async () => {
   const { status, json } = await fetchJson(`${BASE}/api/health`);
   if (status !== 200) return `status ${status}`;
   if (!json || json.ok !== true) return 'ok flag missing';
-  if (json.phase !== 2) return `phase=${json.phase} expected 2`;
+  // Phase number can be any shipped phase (2, 4, 8, …) — just check it's a positive int.
+  if (typeof json.phase !== 'number' || json.phase < 2) return `phase=${json.phase} expected >= 2`;
   return true;
 });
 
@@ -348,6 +355,106 @@ if (!ORG_TOKEN || PARTICIPANTS.length === 0) {
     );
     if (status !== 200) return `status ${status}`;
     if (!json || json.alreadyClosed !== true) return 'alreadyClosed not true';
+    return true;
+  });
+}
+
+// (5) Phase 8 — iCal + close-summary endpoints
+console.log('\n(5) iCal + close-summary flow:');
+if (PARTICIPANTS.length === 0) {
+  await check('GET /api/ical', async () => ({ skip: 'no SMOKE_TOKENS' }));
+} else {
+  const me = PARTICIPANTS[0];
+
+  await check('GET /api/ical?slug=X&token=Y -> 200 text/calendar starts with BEGIN:VCALENDAR', async () => {
+    const { status, text, headers } = await fetchRaw(
+      `${BASE}/api/ical?slug=${encodeURIComponent(SLUG)}&token=${encodeURIComponent(me.token)}`
+    );
+    if (status !== 200) return `status ${status}`;
+    const ct = headers.get('content-type') || '';
+    if (!ct.includes('text/calendar')) return `Content-Type=${ct} expected text/calendar`;
+    if (!text.startsWith('BEGIN:VCALENDAR')) return `body does not start with BEGIN:VCALENDAR; got: ${text.slice(0, 40)}`;
+    if (!text.includes('END:VCALENDAR')) return 'body missing END:VCALENDAR';
+    // 4 VALARM blocks present
+    const alarms = (text.match(/BEGIN:VALARM/g) || []).length;
+    if (alarms !== 4) return `expected 4 VALARM blocks, got ${alarms}`;
+    return true;
+  });
+
+  await check('GET /api/ical with wrong token -> 404', async () => {
+    const { status } = await fetchRaw(
+      `${BASE}/api/ical?slug=${encodeURIComponent(SLUG)}&token=NEVER_VALID_TOKEN_zzz`
+    );
+    if (status !== 404) return `status ${status} expected 404`;
+    return true;
+  });
+
+  await check('GET /ical/<slug>.ics (public) -> 200 text/calendar, no ATTENDEE', async () => {
+    const { status, text, headers } = await fetchRaw(
+      `${BASE}/ical/${encodeURIComponent(SLUG)}.ics`
+    );
+    if (status !== 200) return `status ${status}`;
+    const ct = headers.get('content-type') || '';
+    if (!ct.includes('text/calendar')) return `Content-Type=${ct}`;
+    if (!text.startsWith('BEGIN:VCALENDAR')) return 'body wrong';
+    // Public form must NOT include an ATTENDEE block (privacy).
+    if (text.includes('ATTENDEE')) return 'public .ics leaked ATTENDEE block';
+    return true;
+  });
+}
+
+// (6) Phase 8 — admin-resend-close-summary
+console.log('\n(6) Admin resend-close-summary flow:');
+if (!ORG_TOKEN || PARTICIPANTS.length === 0) {
+  await check('POST /api/admin/resend-close-summary', async () => ({ skip: 'needs SMOKE_ORGANIZER_TOKEN + SMOKE_TOKENS' }));
+} else {
+  const me = PARTICIPANTS[0];
+
+  // Ensure participant has an email on their profile so the resend has a target.
+  await check('POST /api/profile (set test@nowhere.invalid for resend) -> 200', async () => {
+    const body = {
+      slug: SLUG,
+      token: me.token,
+      profile: {
+        email: 'test@nowhere.invalid',
+        homeAirport: 'MUC',
+      },
+    };
+    const { status } = await fetchJson(`${BASE}/api/profile`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (status !== 200) return `status ${status}`;
+    return true;
+  });
+
+  await check('POST /api/admin/resend-close-summary -> 200 { ok, sent, skipped }', async () => {
+    const { status, json } = await fetchJson(
+      `${BASE}/api/admin/resend-close-summary?slug=${encodeURIComponent(SLUG)}`,
+      { method: 'POST', headers: { 'X-Organizer-Token': ORG_TOKEN } }
+    );
+    if (status !== 200) return `status ${status} body=${JSON.stringify(json)}`;
+    if (!json || json.ok !== true) return 'ok flag missing';
+    if (typeof json.sent !== 'number') return `sent not number: ${json.sent}`;
+    if (typeof json.skipped !== 'number') return `skipped not number: ${json.skipped}`;
+    // Real Resend integration check: at least one send should have been attempted
+    // (the one for our test@nowhere.invalid participant). Resend will return 422
+    // "can only send to verified addresses" in sandbox mode, which fanOut treats
+    // as "sent" (the integration did run end-to-end).
+    console.log(`        [info] resend result: sent=${json.sent} skipped=${json.skipped} errors=${JSON.stringify(json.errors)}`);
+    if (json.sent + json.skipped === 0 && (json.errors || []).length === 0) {
+      return 'no email send was attempted — Resend integration did not run';
+    }
+    return true;
+  });
+
+  await check('POST /api/admin/resend-close-summary with WRONG org token -> 404', async () => {
+    const { status } = await fetchJson(
+      `${BASE}/api/admin/resend-close-summary?slug=${encodeURIComponent(SLUG)}`,
+      { method: 'POST', headers: { 'X-Organizer-Token': 'wrong-org-token-NEVER-valid' } }
+    );
+    if (status !== 404) return `status ${status} expected 404`;
     return true;
   });
 }

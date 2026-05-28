@@ -16,6 +16,13 @@ export interface Env {
   WHENWEGO_POLLS_JSON?: string;
   WHENWEGO_TELEGRAM_BOT_TOKEN?: string;
   WHENWEGO_TELEGRAM_CHAT_ID?: string;
+  // Phase 8 — Resend email integration (close-summary + future reminders).
+  // When unset, sendEmail() silently skips (Telegram-only mode still works).
+  WHENWEGO_RESEND_API_KEY?: string;
+  WHENWEGO_RESEND_FROM?: string;
+  // Absolute base URL for links inside emails (must be absolute — relative
+  // URLs don't work in email clients). Dev default: http://localhost:4321.
+  WHENWEGO_SITE_URL?: string;
   // CORS allow-list (comma-separated). Defaults include localhost:4321/8787.
   ALLOWED_ORIGINS?: string;
   WHENWEGO_PHASE?: string;

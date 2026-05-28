@@ -2,11 +2,17 @@
 // POST /api/admin/close?slug=X — force-close a poll (skip waiting for cron).
 // Auth via X-Organizer-Token header (404 on wrong token, mirror admin-poll).
 // Idempotent: already-closed polls return 200 { alreadyClosed: true }.
-import type { Env, WhenWeGoPollDO, VoteRecord } from '../durable-object';
+import type {
+  Env,
+  WhenWeGoPollDO,
+  VoteRecord,
+  ParticipantProfile,
+} from '../durable-object';
 import { errorResponse, jsonResponse } from '../lib/cors';
 import { findPoll, validateOrganizerToken } from '../lib/polls-config';
 import { computeOverlap, type VoteRow } from '../lib/overlap';
 import { notifyPollClose } from '../lib/notify-pipeline';
+import { fanOutCloseSummaryEmails } from '../lib/close-email-fanout';
 
 export async function handleAdminClose(
   req: Request,
@@ -60,6 +66,26 @@ export async function handleAdminClose(
       console.error('[notify] pollClose rejected', err);
     })
   );
+
+  // Phase 8: fan out per-participant close-summary emails (fire-and-forget).
+  // sendEmail() silently skips when WHENWEGO_RESEND_API_KEY is unset, so this
+  // is safe in Telegram-only deployments.
+  const allProfiles = await stub.getAllProfiles();
+  const profilesByToken = new Map(
+    (allProfiles as Array<{ token: string } & ParticipantProfile>).map((p) => [
+      p.token,
+      p,
+    ])
+  );
+  // Non-awaited (awaitAll:false) — each send goes through ctx.waitUntil inside.
+  await fanOutCloseSummaryEmails({
+    env,
+    poll,
+    overlap,
+    profilesByToken,
+    ctx,
+    awaitAll: false,
+  });
 
   return jsonResponse(
     {

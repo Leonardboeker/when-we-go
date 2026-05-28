@@ -7,10 +7,16 @@
 //   2. Skip if poll_meta.closed_at already set
 //   3. Skip if now < pollCloseAt
 //   4. Open poll's DO → compute overlap → closeNow() → notify (idempotent)
-import type { Env, WhenWeGoPollDO, VoteRecord } from './durable-object';
+import type {
+  Env,
+  WhenWeGoPollDO,
+  VoteRecord,
+  ParticipantProfile,
+} from './durable-object';
 import { loadPolls } from './lib/polls-config';
 import { computeOverlap, type VoteRow } from './lib/overlap';
 import { notifyPollClose } from './lib/notify-pipeline';
+import { fanOutCloseSummaryEmails } from './lib/close-email-fanout';
 
 export async function handleScheduled(
   _event: ScheduledController,
@@ -60,6 +66,23 @@ export async function handleScheduled(
             console.error(`[cron] pollClose notify failed for ${poll.slug}`, err);
           })
         );
+
+        // Phase 8: per-participant close-summary emails (fire-and-forget).
+        // Silently skipped when WHENWEGO_RESEND_API_KEY is unset.
+        const allProfiles = await stub.getAllProfiles();
+        const profilesByToken = new Map(
+          (allProfiles as Array<{ token: string } & ParticipantProfile>).map(
+            (p) => [p.token, p]
+          )
+        );
+        await fanOutCloseSummaryEmails({
+          env,
+          poll,
+          overlap,
+          profilesByToken,
+          ctx,
+          awaitAll: false,
+        });
       }
     } catch (err) {
       console.error(`[cron] error processing poll ${poll.slug}`, err);

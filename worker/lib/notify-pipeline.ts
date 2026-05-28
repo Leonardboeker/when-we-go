@@ -1,12 +1,17 @@
 // worker/lib/notify-pipeline.ts
-// Telegram-only notifications for when-we-go (no Resend fallback in Phase 2 —
-// keeps the dep surface small). Three event shapes from CONTEXT A-07.
+// Notifications for when-we-go. Phase 2 was Telegram-only; Phase 8 adds Resend
+// fan-out for per-participant emails (close-summary, later reminders).
 //
 // All functions return { ok, skipped?, error? } — never throw. If the env vars
-// are unset → skipped:true silently so adopters without Telegram still work.
+// are unset → skipped:true silently so adopters without those services still work.
 import type { Env } from '../durable-object';
 import type { Overlap } from './overlap';
 import { sendTelegram } from './telegram';
+import {
+  sendResendEmail,
+  type ResendAttachment,
+  type SendResendEmailResult,
+} from './resend';
 
 export interface NotifyResult {
   ok: boolean;
@@ -120,4 +125,54 @@ export async function notifyPollClose(
   if (res.ok) return { ok: true };
   console.error('[notify] pollClose send failed', res.error);
   return { ok: false, error: res.error };
+}
+
+// ─── Phase 8: Resend email fan-out ─────────────────────────────────────
+// Thin wrapper around sendResendEmail that silently skips when
+// WHENWEGO_RESEND_API_KEY is unset (mirrors the Telegram skip pattern).
+// Callers fire-and-forget via ctx.waitUntil — we never block the API response
+// on email delivery (close-summary fan-out can take seconds for N participants).
+
+export interface SendEmailParams {
+  to: string;
+  subject: string;
+  html: string;
+  text: string;
+  attachments?: ResendAttachment[];
+}
+
+export interface SendEmailResult {
+  ok: boolean;
+  skipped?: boolean;
+  status?: number;
+  error?: string;
+}
+
+export async function sendEmail(
+  env: Env,
+  params: SendEmailParams
+): Promise<SendEmailResult> {
+  if (!env.WHENWEGO_RESEND_API_KEY) {
+    return { ok: false, skipped: true };
+  }
+  const res: SendResendEmailResult = await sendResendEmail({
+    apiKey: env.WHENWEGO_RESEND_API_KEY,
+    from: env.WHENWEGO_RESEND_FROM,
+    to: params.to,
+    subject: params.subject,
+    html: params.html,
+    text: params.text,
+    attachments: params.attachments,
+  });
+  // Log every send result so smoke tests + organiser have a paper trail.
+  // 422 from Resend is "can only send to verified addresses" — expected in
+  // sandbox mode, still confirms the integration ran end-to-end.
+  console.log(
+    `[notify] email to=${params.to} subject="${params.subject}" status=${res.status ?? '?'} ok=${res.ok}${res.error ? ` error=${res.error}` : ''}`
+  );
+  return {
+    ok: res.ok,
+    status: res.status,
+    error: res.error,
+  };
 }

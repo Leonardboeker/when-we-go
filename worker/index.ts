@@ -1,12 +1,19 @@
 // worker/index.ts
 // Main fetch + scheduled entry points for the when-we-go Worker.
 //
-// Routes (Phase 2):
-//   GET  /api/health             health probe — smoke-test target
-//   GET  /api/poll               participant's vote state + poll meta + (post-close) overlap
-//   POST /api/vote               bulk-replace participant's votes
-//   GET  /api/admin/poll         organiser aggregate view
-//   POST /api/admin/close        force-close (organiser-triggered)
+// Routes:
+//   Phase 2:
+//     GET  /api/health             health probe — smoke-test target
+//     GET  /api/poll               participant's vote state + poll meta + (post-close) overlap
+//     POST /api/vote               bulk-replace participant's votes
+//     GET  /api/admin/poll         organiser aggregate view
+//     POST /api/admin/close        force-close (organiser-triggered)
+//   Phase 4:
+//     POST /api/profile            set/update participant profile
+//   Phase 8:
+//     GET  /api/ical               personalised .ics (token-gated)
+//     GET  /ical/<slug>.ics        public minimal .ics (no token)
+//     POST /api/admin/resend-close-summary  re-fire close-summary emails
 //
 // Cron: hourly auto-close per wrangler.toml.
 import { WhenWeGoPollDO, type Env } from './durable-object';
@@ -17,6 +24,8 @@ import { handlePoll } from './handlers/poll';
 import { handleProfile } from './handlers/profile';
 import { handleAdminPoll } from './handlers/admin-poll';
 import { handleAdminClose } from './handlers/admin-close';
+import { handleIcal, handlePublicIcal } from './handlers/ical';
+import { handleAdminResendSummary } from './handlers/admin-resend-summary';
 import { handleScheduled } from './scheduled';
 
 export { WhenWeGoPollDO };
@@ -25,7 +34,8 @@ const router = new Router();
 
 router.get('/api/health', (req, _env, _ctx) => {
   const env = _env as Env;
-  return jsonResponse({ ok: true, phase: 2 }, { status: 200 }, req, env);
+  // Phase number reflects the most-recent shipped phase. Bumped from 2 → 8.
+  return jsonResponse({ ok: true, phase: 8 }, { status: 200 }, req, env);
 });
 
 router.get('/api/poll', (req, env, ctx) =>
@@ -43,6 +53,12 @@ router.get('/api/admin/poll', (req, env, ctx) =>
 router.post('/api/admin/close', (req, env, ctx) =>
   handleAdminClose(req, env as Env, ctx)
 );
+router.get('/api/ical', (req, env, ctx) =>
+  handleIcal(req, env as Env, ctx)
+);
+router.post('/api/admin/resend-close-summary', (req, env, ctx) =>
+  handleAdminResendSummary(req, env as Env, ctx)
+);
 
 export default {
   async fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -52,6 +68,13 @@ export default {
     }
 
     try {
+      // Phase 8: dynamic path for `/ical/<slug>.ics`. Pattern-matched here
+      // because the existing Router does exact path matching only.
+      const url = new URL(req.url);
+      if (req.method === 'GET' && /^\/ical\/[^/]+\.ics$/.test(url.pathname)) {
+        return await handlePublicIcal(req, env, ctx);
+      }
+
       const matched = await router.handle(req, env, ctx);
       if (matched) return matched;
     } catch (err) {
