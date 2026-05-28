@@ -1,0 +1,456 @@
+---
+// src/components/ProfileForm.astro
+// Phase 4 — vanilla-JS profile form. Same philosophy as CalendarGrid: server-
+// rendered HTML + hand-written <script>, zero framework runtime.
+//
+// Fields:
+//   email          (required for "complete") — input type=email
+//   homeAirport    (required for "complete") — autocomplete from airports.json
+//   budgetMaxEur   (optional) — 4-radio group: 200 / 500 / 1000 / no limit
+//   interests      (optional) — 8 checkboxes
+//
+// Form is wired up by the parent page's IIFE (it knows slug/token); we just
+// emit the markup + the airport-autocomplete helper. The parent calls
+// `window.__whenWeGoSubmitProfile(profile)` after building a payload from the
+// fields, then we POST it.
+import airports from '../data/airports.json';
+
+interface Props {
+  /** Initial values from /api/poll (or null). Pre-fills the form when present. */
+  initial?: {
+    email?: string;
+    homeAirport?: string;
+    homeCity?: string;
+    budgetMaxEur?: number;
+    interests?: string[];
+  } | null;
+}
+
+const { initial } = Astro.props as Props;
+const initialInterests = new Set(initial?.interests ?? []);
+
+const INTEREST_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: 'museums', label: 'Museums' },
+  { value: 'outdoors', label: 'Outdoors' },
+  { value: 'food', label: 'Food' },
+  { value: 'nightlife', label: 'Nightlife' },
+  { value: 'history', label: 'History' },
+  { value: 'festivals', label: 'Festivals' },
+  { value: 'shopping', label: 'Shopping' },
+  { value: 'beach', label: 'Beach' },
+];
+
+const BUDGET_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: '200', label: '€200' },
+  { value: '500', label: '€500' },
+  { value: '1000', label: '€1000' },
+  { value: '', label: 'No limit' },
+];
+
+// Serialise the airport list once so the inline script can fuzzy-match it
+// without an HTTP fetch. 245 entries × ~80 chars = ~20KB gzipped to ~6KB.
+const airportsJson = JSON.stringify(airports);
+---
+
+<section
+  class="profile-form"
+  id="profile-form"
+  aria-labelledby="profile-form-heading"
+>
+  <header class="profile-form-header">
+    <h2 id="profile-form-heading">A few quick details</h2>
+    <p class="profile-form-sub">
+      So we can send you trip info and personalise the suggestions.
+    </p>
+  </header>
+
+  <form id="profile-form-element" novalidate>
+    <div class="profile-field">
+      <label for="profile-email">Where should we send the trip details?</label>
+      <input
+        type="email"
+        id="profile-email"
+        name="email"
+        autocomplete="email"
+        inputmode="email"
+        required
+        value={initial?.email ?? ''}
+        placeholder="you@example.com"
+      />
+      <span class="profile-field-error" data-error-for="email" hidden></span>
+    </div>
+
+    <div class="profile-field profile-field-airport">
+      <label for="profile-airport">Where do you fly from?</label>
+      <input
+        type="text"
+        id="profile-airport"
+        name="homeAirport"
+        autocomplete="off"
+        autocorrect="off"
+        autocapitalize="characters"
+        spellcheck="false"
+        required
+        value={initial?.homeAirport ?? ''}
+        placeholder="MUC or Munich"
+        aria-describedby="profile-airport-help"
+        aria-autocomplete="list"
+        aria-controls="profile-airport-list"
+        aria-expanded="false"
+        role="combobox"
+      />
+      <input
+        type="hidden"
+        id="profile-airport-city"
+        name="homeCity"
+        value={initial?.homeCity ?? ''}
+      />
+      <ul
+        class="profile-airport-list"
+        id="profile-airport-list"
+        role="listbox"
+        hidden
+      ></ul>
+      <span id="profile-airport-help" class="profile-field-help">
+        Type a city or IATA code — pick one from the list.
+      </span>
+      <span class="profile-field-error" data-error-for="homeAirport" hidden></span>
+    </div>
+
+    <div class="profile-field">
+      <span class="profile-field-label">What's your per-person budget?</span>
+      <div class="profile-radio-group" role="radiogroup" aria-label="Budget cap per person">
+        {BUDGET_OPTIONS.map((opt) => {
+          const checked = opt.value === ''
+            ? !initial?.budgetMaxEur
+            : initial?.budgetMaxEur === Number(opt.value);
+          return (
+            <label class="profile-radio">
+              <input
+                type="radio"
+                name="budgetMaxEur"
+                value={opt.value}
+                checked={checked}
+              />
+              <span>{opt.label}</span>
+            </label>
+          );
+        })}
+      </div>
+    </div>
+
+    <div class="profile-field">
+      <span class="profile-field-label">What kinds of things do you enjoy?</span>
+      <div class="profile-checks">
+        {INTEREST_OPTIONS.map((opt) => (
+          <label class="profile-check">
+            <input
+              type="checkbox"
+              name="interests"
+              value={opt.value}
+              checked={initialInterests.has(opt.value)}
+            />
+            <span>{opt.label}</span>
+          </label>
+        ))}
+      </div>
+    </div>
+
+    <div class="profile-actions">
+      <button type="submit" class="profile-submit" data-profile-submit>
+        Save &amp; continue
+      </button>
+      <span class="profile-status" data-profile-status aria-live="polite"></span>
+    </div>
+  </form>
+</section>
+
+<script is:inline define:vars={{ airportsJson }}>
+  (function () {
+    'use strict';
+    const AIRPORTS = JSON.parse(airportsJson);
+    const MAX_SUGGESTIONS = 5;
+
+    const input = document.getElementById('profile-airport');
+    const hiddenCity = document.getElementById('profile-airport-city');
+    const listEl = document.getElementById('profile-airport-list');
+    if (!input || !listEl || !hiddenCity) return;
+
+    let activeIndex = -1;
+    let currentMatches = [];
+
+    /** @param {string} q */
+    function search(q) {
+      const needle = q.trim().toLowerCase();
+      if (!needle) return [];
+      const exactCode = AIRPORTS.filter(
+        (a) => a.iata.toLowerCase() === needle
+      );
+      if (exactCode.length > 0) return exactCode.slice(0, MAX_SUGGESTIONS);
+
+      // Prefix match on IATA code wins; then fuzzy match on city/name.
+      const codeMatch = AIRPORTS.filter((a) =>
+        a.iata.toLowerCase().startsWith(needle)
+      );
+      const cityMatch = AIRPORTS.filter(
+        (a) =>
+          !a.iata.toLowerCase().startsWith(needle) &&
+          (a.city.toLowerCase().includes(needle) ||
+            a.name.toLowerCase().includes(needle))
+      );
+      return codeMatch.concat(cityMatch).slice(0, MAX_SUGGESTIONS);
+    }
+
+    function render(matches) {
+      listEl.innerHTML = '';
+      if (matches.length === 0) {
+        listEl.hidden = true;
+        input.setAttribute('aria-expanded', 'false');
+        return;
+      }
+      for (let i = 0; i < matches.length; i++) {
+        const a = matches[i];
+        const li = document.createElement('li');
+        li.setAttribute('role', 'option');
+        li.id = 'profile-airport-opt-' + i;
+        li.dataset.iata = a.iata;
+        li.dataset.city = a.city;
+        li.className = i === activeIndex ? 'is-active' : '';
+        li.innerHTML =
+          '<span class="opt-iata">' + a.iata + '</span> — ' +
+          '<span class="opt-city">' + a.city + '</span>' +
+          ' <span class="opt-name">' + a.name + '</span>';
+        li.addEventListener('mousedown', function (e) {
+          // mousedown (not click) so the input's blur doesn't fire first.
+          e.preventDefault();
+          pick(a);
+        });
+        listEl.appendChild(li);
+      }
+      listEl.hidden = false;
+      input.setAttribute('aria-expanded', 'true');
+    }
+
+    /** @param {{iata:string,city:string}} a */
+    function pick(a) {
+      input.value = a.iata;
+      hiddenCity.value = a.city;
+      listEl.hidden = true;
+      input.setAttribute('aria-expanded', 'false');
+      activeIndex = -1;
+      currentMatches = [];
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    input.addEventListener('input', function () {
+      activeIndex = -1;
+      // Force uppercase IATA visually if the input looks like 3 letters.
+      const v = input.value;
+      if (/^[a-zA-Z]{1,3}$/.test(v) && v !== v.toUpperCase()) {
+        input.value = v.toUpperCase();
+      }
+      currentMatches = search(input.value);
+      render(currentMatches);
+      // If user typed an exact 3-letter code that matches an airport, auto-pick.
+      const exact = AIRPORTS.find((a) => a.iata === input.value.toUpperCase());
+      if (exact && input.value.length === 3) {
+        hiddenCity.value = exact.city;
+      } else {
+        hiddenCity.value = '';
+      }
+    });
+
+    input.addEventListener('keydown', function (e) {
+      if (listEl.hidden || currentMatches.length === 0) return;
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        activeIndex = (activeIndex + 1) % currentMatches.length;
+        render(currentMatches);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        activeIndex =
+          activeIndex <= 0 ? currentMatches.length - 1 : activeIndex - 1;
+        render(currentMatches);
+      } else if (e.key === 'Enter' && activeIndex >= 0) {
+        e.preventDefault();
+        pick(currentMatches[activeIndex]);
+      } else if (e.key === 'Escape') {
+        listEl.hidden = true;
+        input.setAttribute('aria-expanded', 'false');
+      }
+    });
+
+    input.addEventListener('blur', function () {
+      // Slight delay so a mousedown on a list item still picks before hide.
+      setTimeout(function () {
+        listEl.hidden = true;
+        input.setAttribute('aria-expanded', 'false');
+      }, 120);
+    });
+
+    input.addEventListener('focus', function () {
+      if (input.value && currentMatches.length === 0) {
+        currentMatches = search(input.value);
+        render(currentMatches);
+      }
+    });
+  })();
+</script>
+
+<style>
+  .profile-form {
+    margin: 0 0 24px;
+    padding: 20px 18px;
+    background: var(--color-surface-container-low, #f7f3ed);
+    border: 3px solid var(--color-on-background, #1a1a1a);
+    box-shadow: 4px 4px 0 var(--color-on-background, #1a1a1a);
+    font-family: var(--font-body, 'Space Mono', monospace);
+    color: var(--color-on-background, #1a1a1a);
+  }
+  .profile-form-header { margin: 0 0 16px; }
+  .profile-form-header h2 {
+    margin: 0 0 4px;
+    font-family: var(--font-headline, 'Syne', sans-serif);
+    font-size: clamp(20px, 5vw, 26px);
+  }
+  .profile-form-sub {
+    margin: 0;
+    font-size: 14px;
+    color: var(--color-on-surface-variant, #5a5547);
+  }
+  .profile-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0 0 16px;
+    position: relative;
+  }
+  .profile-field label,
+  .profile-field-label {
+    font-family: var(--font-label, 'JetBrains Mono', monospace);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 700;
+  }
+  .profile-field input[type="email"],
+  .profile-field input[type="text"] {
+    padding: 10px 12px;
+    border: 2px solid var(--color-on-background, #1a1a1a);
+    background: var(--color-surface, #fff);
+    font-family: var(--font-body, 'Space Mono', monospace);
+    font-size: 15px;
+    color: var(--color-on-background, #1a1a1a);
+  }
+  .profile-field input:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--color-primary, #1f8c8c);
+  }
+  .profile-field-help {
+    font-family: var(--font-label, 'JetBrains Mono', monospace);
+    font-size: 11px;
+    color: var(--color-on-surface-variant, #5a5547);
+  }
+  .profile-field-error {
+    color: var(--color-error, #b3261e);
+    font-size: 12px;
+    font-family: var(--font-label, 'JetBrains Mono', monospace);
+  }
+  .profile-airport-list {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 30;
+    list-style: none;
+    padding: 0;
+    margin: 4px 0 0;
+    background: var(--color-surface, #fff);
+    border: 2px solid var(--color-on-background, #1a1a1a);
+    box-shadow: 3px 3px 0 var(--color-on-background, #1a1a1a);
+    max-height: 240px;
+    overflow-y: auto;
+  }
+  .profile-airport-list li {
+    padding: 8px 10px;
+    cursor: pointer;
+    font-size: 13px;
+    border-bottom: 1px solid var(--color-outline, #d6d0c4);
+  }
+  .profile-airport-list li:last-child { border-bottom: 0; }
+  .profile-airport-list li:hover,
+  .profile-airport-list li.is-active {
+    background: var(--color-primary-container, #c9eded);
+  }
+  .opt-iata {
+    font-family: var(--font-label, 'JetBrains Mono', monospace);
+    font-weight: 700;
+  }
+  .opt-name {
+    color: var(--color-on-surface-variant, #5a5547);
+    font-size: 11px;
+  }
+  .profile-radio-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .profile-radio,
+  .profile-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border: 2px solid var(--color-on-background, #1a1a1a);
+    background: var(--color-surface, #fff);
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .profile-radio input,
+  .profile-check input {
+    margin: 0;
+  }
+  .profile-checks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .profile-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+  }
+  .profile-submit {
+    font-family: var(--font-label, 'JetBrains Mono', monospace);
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 800;
+    padding: 10px 18px;
+    background: var(--color-primary, #1f8c8c);
+    color: var(--color-on-primary, #fff);
+    border: 2px solid var(--color-on-background, #1a1a1a);
+    box-shadow: 3px 3px 0 var(--color-on-background, #1a1a1a);
+    cursor: pointer;
+  }
+  .profile-submit:active {
+    transform: translate(2px, 2px);
+    box-shadow: none;
+  }
+  .profile-submit[disabled] {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .profile-status {
+    font-family: var(--font-label, 'JetBrains Mono', monospace);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-on-surface-variant, #5a5547);
+  }
+  .profile-status[data-kind="err"] {
+    color: var(--color-error, #b3261e);
+  }
+</style>

@@ -22,3 +22,38 @@ export const VoteRequestSchema = z.object({
   votes: z.array(VoteEntrySchema).max(400),
 });
 export type VoteRequest = z.infer<typeof VoteRequestSchema>;
+
+// ─── Phase 4: participant profile ─────────────────────────────────────
+// Validation lives in the worker so a malformed POST never reaches the DO.
+// Email: standard Zod (no MX check — out of scope). IATA: exact 3 uppercase
+// letters — preempts homoglyph attacks + matches the airports.json lookup key.
+export const ProfileInterestSchema = z.enum([
+  'museums',
+  'outdoors',
+  'food',
+  'nightlife',
+  'history',
+  'festivals',
+  'shopping',
+  'beach',
+]);
+export type ProfileInterest = z.infer<typeof ProfileInterestSchema>;
+
+export const ProfileSchema = z.object({
+  email: z.string().email().max(254).optional(),
+  homeAirport: z
+    .string()
+    .regex(/^[A-Z]{3}$/, 'homeAirport must be exactly 3 uppercase letters')
+    .optional(),
+  homeCity: z.string().max(100).optional(),
+  budgetMaxEur: z.number().int().positive().max(100000).optional(),
+  interests: z.array(ProfileInterestSchema).max(8).optional(),
+});
+export type Profile = z.infer<typeof ProfileSchema>;
+
+export const ProfileRequestSchema = z.object({
+  slug: z.string().min(1).max(120),
+  token: z.string().min(8).max(64),
+  profile: ProfileSchema,
+});
+export type ProfileRequest = z.infer<typeof ProfileRequestSchema>;

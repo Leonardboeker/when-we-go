@@ -32,11 +32,12 @@ export async function handlePoll(
     env.WHENWEGO_POLL_DO.idFromName(slug)
   ) as unknown as DurableObjectStub<WhenWeGoPollDO>;
 
-  const [votes, closedAtRaw, overlapCacheRaw, history] = await Promise.all([
+  const [votes, closedAtRaw, overlapCacheRaw, history, profile] = await Promise.all([
     stub.getVotesForToken(token),
     stub.getMeta('closed_at'),
     stub.getMeta('overlap_cache'),
     stub.getVoterStatus(),
+    stub.getProfile(token),
   ]);
 
   const closed = closedAtRaw !== null;
@@ -68,6 +69,8 @@ export async function handlePoll(
       viewer: {
         name: participant.name,
         voteCount: viewerHistory?.vote_count ?? 0,
+        // Phase 4: own profile only — NEVER include other participants' profiles.
+        profile: profile ?? null,
       },
       votes: (votes as VoteRecord[]).map((v) => ({
         date: v.date,

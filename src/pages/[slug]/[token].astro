@@ -7,6 +7,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import { polls, type Poll, type Participant } from '../../data/polls';
 import PollHeader from '../../components/PollHeader.astro';
 import CalendarGrid from '../../components/CalendarGrid.astro';
+import ProfileForm from '../../components/ProfileForm.astro';
 
 export const prerender = true;
 
@@ -62,10 +63,20 @@ const publicApiBase =
       <span data-summary-text></span>
     </div>
 
-    <CalendarGrid
-      dateRangeStart={poll.dateRangeStart}
-      dateRangeEnd={poll.dateRangeEnd}
-    />
+    {/* Phase 4: profile gate. SSR renders the form hidden; the page IIFE either
+        reveals it (profile incomplete) or hides it for good (profile complete)
+        after /api/poll lands. Calendar is kept inside a wrapper that starts
+        hidden so an unprofiled participant never sees it. */}
+    <div id="profile-gate" hidden>
+      <ProfileForm />
+    </div>
+
+    <div id="calendar-gate" hidden>
+      <CalendarGrid
+        dateRangeStart={poll.dateRangeStart}
+        dateRangeEnd={poll.dateRangeEnd}
+      />
+    </div>
 
     <div id="vote-toast" class="vote-toast" role="status" aria-live="polite" hidden></div>
   </main>
@@ -101,8 +112,124 @@ const publicApiBase =
       ? summaryBanner.querySelector('[data-summary-text]')
       : null;
     const toastEl = document.getElementById('vote-toast');
+    const profileGate = document.getElementById('profile-gate');
+    const calendarGate = document.getElementById('calendar-gate');
+    const profileFormEl = document.getElementById('profile-form-element');
+    const profileStatusEl = document.querySelector('[data-profile-status]');
+    const profileSubmitBtn = document.querySelector('[data-profile-submit]');
 
     if (!grid) return;
+
+    function isProfileComplete(p) {
+      return Boolean(p && p.email && p.homeAirport);
+    }
+
+    function showCalendar() {
+      if (profileGate) profileGate.hidden = true;
+      if (calendarGate) calendarGate.hidden = false;
+    }
+    function showProfileForm() {
+      if (profileGate) profileGate.hidden = false;
+      if (calendarGate) calendarGate.hidden = true;
+    }
+
+    function setProfileStatus(msg, kind) {
+      if (!profileStatusEl) return;
+      profileStatusEl.textContent = msg || '';
+      if (kind) profileStatusEl.dataset.kind = kind;
+      else delete profileStatusEl.dataset.kind;
+    }
+
+    function buildProfilePayload() {
+      if (!profileFormEl) return null;
+      const fd = new FormData(profileFormEl);
+      const email = (fd.get('email') || '').toString().trim();
+      const homeAirport = (fd.get('homeAirport') || '').toString().trim().toUpperCase();
+      const homeCity = (fd.get('homeCity') || '').toString().trim();
+      const budgetRaw = (fd.get('budgetMaxEur') || '').toString();
+      const interests = fd.getAll('interests').map((v) => v.toString());
+
+      const payload = {};
+      if (email) payload.email = email;
+      if (homeAirport) payload.homeAirport = homeAirport;
+      if (homeCity) payload.homeCity = homeCity;
+      if (budgetRaw) {
+        const n = parseInt(budgetRaw, 10);
+        if (!isNaN(n) && n > 0) payload.budgetMaxEur = n;
+      }
+      if (interests.length > 0) payload.interests = interests;
+      return payload;
+    }
+
+    function validateProfileClientSide(p) {
+      const errors = {};
+      if (!p.email) errors.email = 'Please enter your email.';
+      else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p.email))
+        errors.email = 'That email looks invalid.';
+      if (!p.homeAirport) errors.homeAirport = 'Pick your home airport.';
+      else if (!/^[A-Z]{3}$/.test(p.homeAirport))
+        errors.homeAirport = 'Airport must be a 3-letter IATA code.';
+      return errors;
+    }
+
+    function setFieldError(name, msg) {
+      const el = document.querySelector(
+        '[data-error-for="' + name + '"]'
+      );
+      if (!el) return;
+      if (msg) {
+        el.textContent = msg;
+        el.hidden = false;
+      } else {
+        el.textContent = '';
+        el.hidden = true;
+      }
+    }
+
+    async function submitProfile(e) {
+      if (e) e.preventDefault();
+      const payload = buildProfilePayload();
+      if (!payload) return;
+      setFieldError('email', '');
+      setFieldError('homeAirport', '');
+      const errors = validateProfileClientSide(payload);
+      if (Object.keys(errors).length > 0) {
+        for (const k of Object.keys(errors)) setFieldError(k, errors[k]);
+        setProfileStatus('Please fix the errors above.', 'err');
+        return;
+      }
+      if (profileSubmitBtn) profileSubmitBtn.disabled = true;
+      setProfileStatus('Saving…', '');
+      try {
+        const res = await fetch(apiBase + '/api/profile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ slug, token, profile: payload }),
+        });
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}));
+          throw new Error(j.error || 'HTTP ' + res.status);
+        }
+        const j = await res.json();
+        setProfileStatus('Saved.', '');
+        if (j.profileComplete) {
+          showCalendar();
+          // Refresh server state so the grid initialises with current votes.
+          refreshState();
+        }
+      } catch (err) {
+        setProfileStatus(
+          'Save failed: ' + (err && err.message ? err.message : 'unknown'),
+          'err'
+        );
+      } finally {
+        if (profileSubmitBtn) profileSubmitBtn.disabled = false;
+      }
+    }
+
+    if (profileFormEl) {
+      profileFormEl.addEventListener('submit', submitProfile);
+    }
 
     /** @param {string} msg */
     function setStatus(msg) {
@@ -229,10 +356,32 @@ const publicApiBase =
     /**
      * Initialise cell visuals from server response. Also applies overlap badges
      * when the poll is closed.
-     * @param {{votes:Array<{date:string,state:string}>,closed:boolean,overlap:any}} data
+     * @param {{votes:Array<{date:string,state:string}>,closed:boolean,overlap:any,viewer?:{profile:any}}} data
      */
     function applyServerState(data) {
       closed = !!data.closed;
+
+      // Phase 4 gating: profile complete → calendar visible; otherwise show form.
+      // The form pre-fills from any partial profile so returning users see their
+      // last input.
+      const profile = data && data.viewer && data.viewer.profile;
+      if (isProfileComplete(profile)) {
+        showCalendar();
+      } else {
+        // Pre-populate inputs with whatever profile state exists.
+        if (profile) {
+          const emailEl = document.getElementById('profile-email');
+          const airportEl = document.getElementById('profile-airport');
+          const cityEl = document.getElementById('profile-airport-city');
+          if (emailEl && profile.email) emailEl.value = profile.email;
+          if (airportEl && profile.homeAirport) airportEl.value = profile.homeAirport;
+          if (cityEl && profile.homeCity) cityEl.value = profile.homeCity;
+        }
+        showProfileForm();
+        // No further state work needed — user must complete profile first.
+        return;
+      }
+
       for (const v of data.votes || []) {
         voteState[v.date] = v.state;
         const cell = grid.querySelector(

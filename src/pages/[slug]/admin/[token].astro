@@ -109,11 +109,15 @@ const publicApiBase =
           </button>
         </div>
       </div>
+      <p class="admin-profiles-summary" data-admin-profiles-summary>
+        Profiles: <span data-admin-profiles-count>—</span>
+      </p>
       <table class="admin-table">
         <thead>
           <tr>
             <th scope="col">Name</th>
             <th scope="col">Status</th>
+            <th scope="col">Profile</th>
             <th scope="col">Picks</th>
             <th scope="col">Last vote</th>
           </tr>
@@ -123,6 +127,7 @@ const publicApiBase =
             <tr data-token={p.token}>
               <td>{p.name}</td>
               <td><span class="status-badge status-open">No votes yet</span></td>
+              <td><span class="admin-cell-placeholder" data-cell="profile">—</span></td>
               <td><span class="admin-cell-placeholder">—</span></td>
               <td><span class="admin-cell-placeholder">—</span></td>
             </tr>
@@ -180,17 +185,28 @@ const publicApiBase =
 
         // Voters table
         if (votersEl) {
+          let profilesComplete = 0;
           for (const v of data.voterStatus) {
             const row = votersEl.querySelector('tr[data-token="' + v.token + '"]');
             if (!row) continue;
             const tds = row.querySelectorAll('td');
-            if (tds.length < 4) continue;
+            if (tds.length < 5) continue;
             // status badge
             tds[1].innerHTML = v.hasVoted
               ? '<span class="status-badge status-paid">Voted</span>'
               : '<span class="status-badge status-open">No votes yet</span>';
-            tds[2].textContent = String(v.voteCount || 0);
-            tds[3].textContent = fmtTs(v.lastVotedAt);
+            // profile badge — typeof check so missing field falls through gracefully
+            const complete = v.profileComplete === true;
+            tds[2].innerHTML = complete
+              ? '<span class="status-badge status-paid" title="Email + airport set">&#x2713;</span>'
+              : '<span class="status-badge status-open" title="Profile incomplete">&#x2717;</span>';
+            if (complete) profilesComplete++;
+            tds[3].textContent = String(v.voteCount || 0);
+            tds[4].textContent = fmtTs(v.lastVotedAt);
+          }
+          const countEl = document.querySelector('[data-admin-profiles-count]');
+          if (countEl) {
+            countEl.textContent = profilesComplete + ' / ' + data.voterStatus.length + ' complete';
           }
         }
 
@@ -397,6 +413,21 @@ const publicApiBase =
     color: var(--color-on-surface-variant);
     text-transform: uppercase;
     letter-spacing: 0.05em;
+  }
+  .admin-profiles-summary {
+    margin: 0 0 10px;
+    padding: 8px 12px;
+    background: var(--color-surface-container-low);
+    border-left: 4px solid var(--color-primary);
+    font-family: var(--font-label, 'JetBrains Mono', monospace);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-on-surface-variant);
+  }
+  .admin-profiles-summary span {
+    color: var(--color-on-background);
+    font-weight: 700;
   }
   .admin-actions {
     display: inline-flex;

@@ -2,7 +2,14 @@
 // GET /api/admin/poll?slug=X — aggregate per-date breakdown + voter status + overlap.
 // Auth via X-Organizer-Token header. Wrong/missing token → 404 (slug-enumeration
 // protection, mirrors pay-me-back's admin-route hardening).
-import type { Env, WhenWeGoPollDO, VoteRecord, VoterStatusRow } from '../durable-object';
+import type {
+  Env,
+  WhenWeGoPollDO,
+  VoteRecord,
+  VoterStatusRow,
+  ParticipantProfile,
+} from '../durable-object';
+import { isProfileComplete } from '../durable-object';
 import { errorResponse, jsonResponse } from '../lib/cors';
 import { findPoll, validateOrganizerToken } from '../lib/polls-config';
 import { computeOverlap, type Overlap, type VoteRow } from '../lib/overlap';
@@ -29,11 +36,12 @@ export async function handleAdminPoll(
     env.WHENWEGO_POLL_DO.idFromName(slug)
   ) as unknown as DurableObjectStub<WhenWeGoPollDO>;
 
-  const [allVotes, voterStatus, closedAtRaw, cachedOverlapRaw] = await Promise.all([
+  const [allVotes, voterStatus, closedAtRaw, cachedOverlapRaw, allProfiles] = await Promise.all([
     stub.getAllVotes(),
     stub.getVoterStatus(),
     stub.getMeta('closed_at'),
     stub.getMeta('overlap_cache'),
+    stub.getAllProfiles(),
   ]);
 
   const closed = closedAtRaw !== null;
@@ -70,8 +78,18 @@ export async function handleAdminPoll(
   const statusByToken = new Map(
     (voterStatus as VoterStatusRow[]).map((s) => [s.token, s])
   );
+  // Phase 4: index profiles by token for the profileComplete flag.
+  // We expose only the boolean — the actual email/airport stay DO-side
+  // (privacy: organiser doesn't need to see participants' personal data).
+  const profileByToken = new Map(
+    (allProfiles as Array<{ token: string } & ParticipantProfile>).map((p) => [
+      p.token,
+      p,
+    ])
+  );
   const voterRows = poll.participants.map((p) => {
     const s = statusByToken.get(p.token);
+    const prof = profileByToken.get(p.token);
     return {
       name: p.name,
       token: p.token,
@@ -79,6 +97,7 @@ export async function handleAdminPoll(
       firstVotedAt: s?.first_voted_at ?? null,
       lastVotedAt: s?.last_voted_at ?? null,
       voteCount: s?.vote_count ?? 0,
+      profileComplete: isProfileComplete(prof ?? null),
     };
   });
 

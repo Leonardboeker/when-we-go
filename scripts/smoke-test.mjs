@@ -167,12 +167,104 @@ if (PARTICIPANTS.length === 0) {
   });
 }
 
+// (2b) Profile flow (Phase 4) — validation + persistence + read-back
+console.log('\n(2b) Profile flow:');
+if (PARTICIPANTS.length === 0) {
+  await check('POST /api/profile', async () => ({ skip: 'no SMOKE_TOKENS' }));
+} else {
+  const me = PARTICIPANTS[0];
+
+  await check('POST /api/profile with valid body -> 200 { ok, profileComplete:true }', async () => {
+    const body = {
+      slug: SLUG,
+      token: me.token,
+      profile: {
+        email: 'smoke-test@example.com',
+        homeAirport: 'MUC',
+        homeCity: 'Munich',
+        budgetMaxEur: 500,
+        interests: ['food', 'museums'],
+      },
+    };
+    const { status, json } = await fetchJson(`${BASE}/api/profile`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (status !== 200) return `status ${status} body=${JSON.stringify(json)}`;
+    if (!json || json.ok !== true) return 'ok flag missing';
+    if (json.profileComplete !== true) return `profileComplete=${json.profileComplete} expected true`;
+    return true;
+  });
+
+  await check('POST /api/profile with invalid email -> 400', async () => {
+    const body = {
+      slug: SLUG,
+      token: me.token,
+      profile: { email: 'not-an-email', homeAirport: 'MUC' },
+    };
+    const { status } = await fetchJson(`${BASE}/api/profile`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (status !== 400) return `status ${status} expected 400`;
+    return true;
+  });
+
+  await check('POST /api/profile with invalid IATA (lowercase) -> 400', async () => {
+    const body = {
+      slug: SLUG,
+      token: me.token,
+      profile: { email: 'ok@example.com', homeAirport: 'muc' },
+    };
+    const { status } = await fetchJson(`${BASE}/api/profile`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (status !== 400) return `status ${status} expected 400`;
+    return true;
+  });
+
+  await check('POST /api/profile with invalid IATA (4 letters) -> 400', async () => {
+    const body = {
+      slug: SLUG,
+      token: me.token,
+      profile: { homeAirport: 'MUCX' },
+    };
+    const { status } = await fetchJson(`${BASE}/api/profile`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (status !== 400) return `status ${status} expected 400`;
+    return true;
+  });
+
+  await check('GET /api/poll after profile set -> viewer.profile present', async () => {
+    const { status, json } = await fetchJson(
+      `${BASE}/api/poll?slug=${encodeURIComponent(SLUG)}&token=${encodeURIComponent(me.token)}`
+    );
+    if (status !== 200) return `status ${status}`;
+    if (!json || !json.viewer) return 'viewer missing';
+    if (!json.viewer.profile) return 'viewer.profile missing';
+    if (json.viewer.profile.email !== 'smoke-test@example.com') {
+      return `email=${json.viewer.profile.email} expected smoke-test@example.com`;
+    }
+    if (json.viewer.profile.homeAirport !== 'MUC') {
+      return `homeAirport=${json.viewer.profile.homeAirport} expected MUC`;
+    }
+    return true;
+  });
+}
+
 // (3) Admin flow
 console.log('\n(3) Admin flow:');
 if (!ORG_TOKEN) {
   await check('GET /api/admin/poll', async () => ({ skip: 'no SMOKE_ORGANIZER_TOKEN' }));
 } else {
-  await check('GET /api/admin/poll with org token -> 200 + voterStatus + overlap', async () => {
+  await check('GET /api/admin/poll with org token -> 200 + voterStatus + overlap + profileComplete', async () => {
     const { status, json } = await fetchJson(
       `${BASE}/api/admin/poll?slug=${encodeURIComponent(SLUG)}`,
       { headers: { 'X-Organizer-Token': ORG_TOKEN } }
@@ -180,6 +272,12 @@ if (!ORG_TOKEN) {
     if (status !== 200) return `status ${status}`;
     if (!json || !Array.isArray(json.voterStatus)) return 'voterStatus missing';
     if (!json.overlap || !json.overlap.perDate) return 'overlap missing';
+    // Phase 4: every voter row must include a profileComplete boolean.
+    for (const v of json.voterStatus) {
+      if (typeof v.profileComplete !== 'boolean') {
+        return `voter ${v.name} profileComplete not boolean (was ${typeof v.profileComplete})`;
+      }
+    }
     return true;
   });
 

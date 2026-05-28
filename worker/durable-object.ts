@@ -42,6 +42,38 @@ export interface VoterStatusRow {
   vote_count: number;
 }
 
+// Phase 4 — participant_profile schema. Lives in the DO ONLY (never in polls.json
+// or any other env-committed location) because emails are personal data.
+// `interests` is stored as a JSON-array string so we can keep the row flat.
+export type ProfileInterest =
+  | 'museums'
+  | 'outdoors'
+  | 'food'
+  | 'nightlife'
+  | 'history'
+  | 'festivals'
+  | 'shopping'
+  | 'beach';
+
+export interface ParticipantProfile {
+  email?: string;
+  homeAirport?: string;   // IATA 3-letter code, uppercase
+  homeCity?: string;
+  budgetMaxEur?: number;
+  interests?: ProfileInterest[];
+}
+
+// Row shape as stored in SQLite. `interests` arrives/leaves as JSON string.
+interface ProfileRow {
+  token: string;
+  email: string | null;
+  home_airport: string | null;
+  home_city: string | null;
+  budget_max_eur: number | null;
+  interests: string | null;
+  updated_at: number;
+}
+
 export class WhenWeGoPollDO extends DurableObject {
   sql: SqlStorage;
 
@@ -72,6 +104,17 @@ export class WhenWeGoPollDO extends DurableObject {
       CREATE TABLE IF NOT EXISTS poll_meta (
         key    TEXT PRIMARY KEY,
         value  TEXT NOT NULL
+      );
+    `);
+    this.sql.exec(`
+      CREATE TABLE IF NOT EXISTS participant_profile (
+        token            TEXT PRIMARY KEY,
+        email            TEXT,
+        home_airport     TEXT,
+        home_city        TEXT,
+        budget_max_eur   INTEGER,
+        interests        TEXT,
+        updated_at       INTEGER NOT NULL
       );
     `);
   }
@@ -180,4 +223,81 @@ export class WhenWeGoPollDO extends DurableObject {
   isClosed(): boolean {
     return this.getMeta('closed_at') !== null;
   }
+
+  // ─── Phase 4: participant profile ───────────────────────────────────
+  // Upsert semantics — INSERT OR REPLACE so the caller doesn't need to know
+  // whether a row already exists. `interests` is JSON-stringified for storage;
+  // getProfile parses it back. Nullable columns map to undefined in TS land.
+  setProfile(token: string, profile: ParticipantProfile): void {
+    const now = Date.now();
+    const interestsJson =
+      profile.interests && profile.interests.length > 0
+        ? JSON.stringify(profile.interests)
+        : null;
+    this.sql.exec(
+      `INSERT OR REPLACE INTO participant_profile
+         (token, email, home_airport, home_city, budget_max_eur, interests, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      token,
+      profile.email ?? null,
+      profile.homeAirport ?? null,
+      profile.homeCity ?? null,
+      profile.budgetMaxEur ?? null,
+      interestsJson,
+      now
+    );
+  }
+
+  getProfile(token: string): ParticipantProfile | null {
+    const rows = this.sql
+      .exec(
+        `SELECT token, email, home_airport, home_city, budget_max_eur, interests, updated_at
+         FROM participant_profile WHERE token = ? LIMIT 1`,
+        token
+      )
+      .toArray() as unknown as ProfileRow[];
+    if (rows.length === 0) return null;
+    return rowToProfile(rows[0]);
+  }
+
+  // Admin view: all profiles, keyed by token. Used to compute the
+  // `voterStatus[].profileComplete` flag in /api/admin/poll.
+  getAllProfiles(): Array<{ token: string } & ParticipantProfile> {
+    const rows = this.sql
+      .exec(
+        `SELECT token, email, home_airport, home_city, budget_max_eur, interests, updated_at
+         FROM participant_profile`
+      )
+      .toArray() as unknown as ProfileRow[];
+    return rows.map((r) => ({ token: r.token, ...rowToProfile(r) }));
+  }
+}
+
+function rowToProfile(r: ProfileRow): ParticipantProfile {
+  let interests: ProfileInterest[] | undefined;
+  if (r.interests) {
+    try {
+      const parsed = JSON.parse(r.interests);
+      if (Array.isArray(parsed)) interests = parsed as ProfileInterest[];
+    } catch {
+      interests = undefined;
+    }
+  }
+  return {
+    email: r.email ?? undefined,
+    homeAirport: r.home_airport ?? undefined,
+    homeCity: r.home_city ?? undefined,
+    budgetMaxEur: r.budget_max_eur ?? undefined,
+    interests,
+  };
+}
+
+// Profile is "complete" when both email + homeAirport are set (the two fields
+// needed by Phases 5/8 for flights + notifications). Budget/interests are
+// optional polish. Exported so /api/admin/poll can compute the boolean.
+export function isProfileComplete(
+  profile: ParticipantProfile | null
+): boolean {
+  if (!profile) return false;
+  return Boolean(profile.email && profile.homeAirport);
 }
