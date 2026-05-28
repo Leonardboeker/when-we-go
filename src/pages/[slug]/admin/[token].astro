@@ -1,0 +1,224 @@
+---
+// src/pages/[slug]/admin/[token].astro
+// Phase 1: organiser dashboard skeleton. One static path per poll, keyed by
+// organizerToken. Wrong tokens 404 because no file is generated for them.
+// Phase 2 wires in the Worker API for real vote aggregation.
+import type { GetStaticPaths } from 'astro';
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import { polls, type Poll } from '../../../data/polls';
+import { daysUntil } from '../../../lib/calendar';
+
+export const prerender = true;
+
+export const getStaticPaths = (() => {
+  return polls.map((poll) => ({
+    params: { slug: poll.slug, token: poll.organizerToken },
+    props: { poll },
+  }));
+}) satisfies GetStaticPaths;
+
+const { poll } = Astro.props as { poll: Poll };
+
+const days = daysUntil(poll.pollCloseAt);
+const closed = days === 0;
+const closeLabel = new Date(poll.pollCloseAt).toLocaleString('en-GB', {
+  weekday: 'short',
+  day: '2-digit',
+  month: 'short',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+  timeZoneName: 'short',
+});
+---
+
+<BaseLayout title={`${poll.title} — admin`}>
+  <main class="admin-page">
+    <header class="admin-header">
+      <p class="admin-eyebrow">Organiser dashboard</p>
+      <h1>{poll.title}</h1>
+      {poll.destination && <p class="admin-destination">{poll.destination}</p>}
+    </header>
+
+    <section class="admin-meta admin-card" aria-label="Poll metadata">
+      <dl class="admin-meta-grid">
+        <div>
+          <dt>Slug</dt>
+          <dd><code>{poll.slug}</code></dd>
+        </div>
+        <div>
+          <dt>Date range</dt>
+          <dd>{poll.dateRangeStart} → {poll.dateRangeEnd}</dd>
+        </div>
+        <div>
+          <dt>Poll closes</dt>
+          <dd>{closeLabel}</dd>
+        </div>
+        <div>
+          <dt>Status</dt>
+          <dd>
+            {closed ? (
+              <span class="status-badge status-delayed">Closed</span>
+            ) : (
+              <span class="status-badge status-open">{days} day{days === 1 ? '' : 's'} left</span>
+            )}
+          </dd>
+        </div>
+        <div>
+          <dt>Participants</dt>
+          <dd>{poll.participants.length}</dd>
+        </div>
+        <div>
+          <dt>Created</dt>
+          <dd>{poll.createdAt.slice(0, 10)}</dd>
+        </div>
+      </dl>
+    </section>
+
+    <section class="admin-section" aria-label="Best dates">
+      <h2>Best dates</h2>
+      <div class="admin-card admin-empty">
+        <p>
+          <strong>Phase 2 fills this in.</strong>
+          Once participants start voting, this panel shows the days everyone
+          can come, sorted by overlap.
+        </p>
+      </div>
+    </section>
+
+    <section class="admin-section" aria-label="Participants">
+      <div class="admin-section-head">
+        <h2>Participants</h2>
+        <button type="button" class="admin-button" id="refresh-btn" disabled aria-disabled="true">
+          Refresh (Phase 2)
+        </button>
+      </div>
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th scope="col">Name</th>
+            <th scope="col">Status</th>
+            <th scope="col">Picks</th>
+          </tr>
+        </thead>
+        <tbody>
+          {poll.participants.map((p) => (
+            <tr>
+              <td>{p.name}</td>
+              <td><span class="status-badge status-open">No votes yet</span></td>
+              <td><span class="admin-cell-placeholder">—</span></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+
+    <p class="admin-foot-note">
+      <span aria-hidden="true">🚧</span>
+      Phase 1: the admin dashboard renders metadata + the participant list.
+      Vote aggregation comes online in Phase 2 once the Worker + Durable Object
+      are wired up.
+    </p>
+  </main>
+</BaseLayout>
+
+<style>
+  .admin-page {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 24px 16px 48px;
+    font-family: var(--font-body, 'Space Mono', monospace);
+    color: var(--color-on-background);
+  }
+  .admin-header {
+    margin: 0 0 24px;
+  }
+  .admin-eyebrow {
+    font-family: var(--font-label, 'JetBrains Mono', monospace);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--color-on-surface-variant);
+    margin: 0 0 4px;
+  }
+  .admin-header h1 {
+    margin: 0 0 6px;
+    font-family: var(--font-headline, 'Syne', sans-serif);
+    font-size: clamp(22px, 6vw, 32px);
+  }
+  .admin-destination {
+    margin: 0;
+    color: var(--color-on-surface-variant);
+    font-size: 14px;
+  }
+  .admin-meta {
+    margin: 0 0 24px;
+  }
+  .admin-meta-grid {
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 14px 20px;
+  }
+  .admin-meta-grid > div {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .admin-meta-grid dt {
+    font-family: var(--font-label, 'JetBrains Mono', monospace);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-on-surface-variant);
+  }
+  .admin-meta-grid dd {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .admin-meta-grid code {
+    font-family: var(--font-label, 'JetBrains Mono', monospace);
+    font-size: 13px;
+    background: var(--color-surface-container);
+    padding: 2px 6px;
+  }
+  .admin-section {
+    margin: 0 0 24px;
+  }
+  .admin-section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 0 0 10px;
+  }
+  .admin-section h2 {
+    margin: 0;
+    font-family: var(--font-headline, 'Syne', sans-serif);
+    font-size: 20px;
+  }
+  .admin-empty p {
+    margin: 0;
+    font-size: 14px;
+    color: var(--color-on-surface-variant);
+  }
+  .admin-empty strong {
+    color: var(--color-primary);
+  }
+  .admin-cell-placeholder {
+    color: var(--color-on-surface-variant);
+    font-family: var(--font-label, 'JetBrains Mono', monospace);
+  }
+  .admin-foot-note {
+    margin: 24px 0 0;
+    padding: 10px 14px;
+    background: var(--color-surface-container-low);
+    border: 1px dashed var(--color-outline);
+    font-family: var(--font-label, 'JetBrains Mono', monospace);
+    font-size: 12px;
+    color: var(--color-on-surface-variant);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+</style>

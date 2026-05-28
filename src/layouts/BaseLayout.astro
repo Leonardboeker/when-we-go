@@ -1,0 +1,269 @@
+---
+import '../styles/global.css';
+
+interface Props {
+  title?: string;
+  /** Per-poll OG image path (e.g. "/og/<slug>.png"). When set, link-preview
+   *  apps (WhatsApp, iMessage, Twitter) render a personalised card. */
+  ogImage?: string;
+  /** OG description shown beneath the title in link previews */
+  ogDescription?: string;
+}
+const {
+  title = 'when-we-go',
+  ogImage,
+  ogDescription = 'A friend-shaped when-we-go date-picker microsite.',
+} = Astro.props;
+
+// Resolve OG image to a full URL so platforms that require absolute URLs work
+const ogImageAbsolute = ogImage
+  ? new URL(ogImage, Astro.site ?? Astro.url.origin).toString()
+  : undefined;
+
+// ───────────────────────────────────────────────────────────────
+// Demo-mode banner
+// Set WHENWEGO_DEMO_MODE=true at build time to render a loud striped warning
+// at the very top of every page: "DEMO POLL — votes don't persist etc."
+// Left off in production (env var unset) so real adopters get a clean header.
+// ───────────────────────────────────────────────────────────────
+const isDemoMode = (import.meta.env.WHENWEGO_DEMO_MODE as string | undefined) === 'true';
+
+// ───────────────────────────────────────────────────────────────
+// Hide-footers escape hatch
+// Set WHENWEGO_HIDE_FOOTERS=true to suppress both the built-with badge
+// AND the sibling cross-link. Adopters who don't want either can opt out
+// without forking the layout.
+// ───────────────────────────────────────────────────────────────
+const hideFooters =
+  (import.meta.env.WHENWEGO_HIDE_FOOTERS as string | undefined) === 'true';
+
+// ───────────────────────────────────────────────────────────────
+// Attribution footer
+// Shown at the very bottom of every page. Lets visitors see this is
+// open-source and find the template to build their own.
+//
+// To remove or customise: delete the <footer class="built-with-footer">
+// block below, or set WHENWEGO_HIDE_FOOTERS=true. (Keeping it is
+// appreciated, not required — MIT license.)
+// ───────────────────────────────────────────────────────────────
+const REPO_URL = 'https://github.com/Leonardboeker/when-we-go';
+const SIBLING_REPO_URL = 'https://github.com/Leonardboeker/pay-me-back';
+---
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="referrer" content="no-referrer" />
+    <title>{title}</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+    {/* Google Fonts (Syne / JetBrains Mono / Space Mono / Press Start 2P).
+        Loaded via <link> rather than CSS @import to avoid Lightning CSS
+        warnings about @import-after-@layer (Tailwind v4 injects layers). */}
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&family=Press+Start+2P&family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&family=Syne:wght@400..800&display=swap"
+    />
+
+    {/* Open Graph / Twitter card — shown in WhatsApp, iMessage, Slack, Twitter etc. */}
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={ogDescription} />
+    <meta property="og:type" content="website" />
+    {ogImageAbsolute && <meta property="og:image" content={ogImageAbsolute} />}
+    {ogImageAbsolute && <meta property="og:image:width" content="1200" />}
+    {ogImageAbsolute && <meta property="og:image:height" content="630" />}
+    <meta name="twitter:card" content={ogImageAbsolute ? 'summary_large_image' : 'summary'} />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={ogDescription} />
+    {ogImageAbsolute && <meta name="twitter:image" content={ogImageAbsolute} />}
+
+    <slot name="head" />
+    <style>
+      /* Attribution footer — see comment in BaseLayout.astro */
+      .built-with-footer {
+        width: 100%;
+        padding: 14px 16px;
+        background: var(--color-surface-container-lowest, #f6f0e3);
+        border-top: 3px solid var(--color-on-background, #2a1f1a);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        font-family: 'JetBrains Mono', ui-monospace, monospace;
+        font-size: 11px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--color-on-surface-variant, #6b5d52);
+      }
+      .built-with-footer a {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--color-on-background, #2a1f1a);
+        font-weight: 700;
+        text-decoration: none;
+        border-bottom: 2px solid currentColor;
+        padding-bottom: 1px;
+        transition: color 0.15s ease;
+      }
+      .built-with-footer a:hover,
+      .built-with-footer a:focus-visible {
+        color: var(--color-primary, #2c8c8c);
+      }
+      .built-with-footer svg {
+        width: 14px;
+        height: 14px;
+        flex-shrink: 0;
+      }
+      .built-with-footer .built-with-coin {
+        font-size: 12px;
+      }
+
+      /* Sibling-cross-link strip — sits just above the built-with-footer */
+      .sibling-link-strip {
+        width: 100%;
+        padding: 10px 16px;
+        background: var(--color-surface-container-low, #fff3d5);
+        border-top: 1px dashed var(--color-outline-variant, #d8c3b2);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        font-family: 'JetBrains Mono', ui-monospace, monospace;
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        color: var(--color-on-surface-variant, #6b5d52);
+        text-align: center;
+        flex-wrap: wrap;
+      }
+      .sibling-link-strip a {
+        color: var(--color-on-background, #2a1f1a);
+        font-weight: 700;
+        text-decoration: none;
+        border-bottom: 2px solid currentColor;
+        padding-bottom: 1px;
+        transition: color 0.15s ease;
+      }
+      .sibling-link-strip a:hover,
+      .sibling-link-strip a:focus-visible {
+        color: var(--color-primary, #2c8c8c);
+      }
+
+      /* Demo-mode banner — see WHENWEGO_DEMO_MODE in BaseLayout.astro */
+      .demo-banner {
+        position: relative;
+        width: 100%;
+        background: repeating-linear-gradient(
+          135deg,
+          #facc15 0 28px,
+          #fde047 28px 56px
+        );
+        border-bottom: 4px solid #2a1f1a;
+        padding: 14px 16px;
+        text-align: center;
+        font-family: 'JetBrains Mono', ui-monospace, monospace;
+        color: #2a1f1a;
+        z-index: 50;
+      }
+      .demo-banner-inner {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: center;
+        gap: 6px 14px;
+        max-width: 980px;
+        margin: 0 auto;
+      }
+      .demo-banner-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        background: #2a1f1a;
+        color: #fde047;
+        font-weight: 800;
+        font-size: 13px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        border: 2px solid #2a1f1a;
+        box-shadow: 3px 3px 0 #2a1f1a;
+      }
+      .demo-banner-body {
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        line-height: 1.35;
+      }
+      .demo-banner-body strong {
+        background: #2a1f1a;
+        color: #fde047;
+        padding: 1px 5px;
+      }
+      .demo-banner-repo {
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #2a1f1a;
+        text-decoration: underline;
+        text-decoration-thickness: 2px;
+        text-underline-offset: 3px;
+      }
+      .demo-banner-repo:hover,
+      .demo-banner-repo:focus-visible {
+        background: #2a1f1a;
+        color: #fde047;
+        text-decoration: none;
+      }
+    </style>
+  </head>
+  <body>
+    {/* Demo banner — only rendered when WHENWEGO_DEMO_MODE=true at build time. */}
+    {isDemoMode && (
+      <aside class="demo-banner" role="alert" aria-label="Demo page notice">
+        <div class="demo-banner-inner">
+          <span class="demo-banner-tag" aria-hidden="true">🚧 DEMO POLL</span>
+          <span class="demo-banner-body">
+            This is a <strong>demo poll</strong>. Votes don't persist anywhere
+            and no real trip is being planned.
+          </span>
+          <a class="demo-banner-repo" href={REPO_URL} target="_blank" rel="noopener noreferrer">
+            View the source / fork this →
+          </a>
+        </div>
+      </aside>
+    )}
+
+    <slot />
+
+    {!hideFooters && (
+      <>
+        {/* Sibling cross-link — pay-me-back is the matched-pair tool for AFTER the trip */}
+        <aside class="sibling-link-strip" role="complementary" aria-label="Sibling project link">
+          <span aria-hidden="true">💸</span>
+          <span>Need to split costs after the trip?</span>
+          <a href={SIBLING_REPO_URL} target="_blank" rel="noopener noreferrer">
+            pay-me-back →
+          </a>
+        </aside>
+
+        {/* Open-source attribution. See comment in BaseLayout.astro frontmatter to remove. */}
+        <footer class="built-with-footer" role="contentinfo">
+          <span class="built-with-coin" aria-hidden="true">🗓️</span>
+          <span>Built with</span>
+          <a href={REPO_URL} target="_blank" rel="noopener noreferrer">
+            <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+              <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/>
+            </svg>
+            when-we-go
+          </a>
+          <span>— pick a trip date together</span>
+        </footer>
+      </>
+    )}
+  </body>
+</html>

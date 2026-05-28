@@ -1,0 +1,41 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+<BaseLayout title="when-we-go">
+  <main class="landing">
+    <h1>when-we-go</h1>
+    <p>
+      Wrong door. If you got a link, follow that — your personal date-picker
+      lives at the URL you were sent.
+    </p>
+    <p>
+      Looking for the source? Find it on
+      <a href="https://github.com/Leonardboeker/when-we-go" target="_blank" rel="noopener noreferrer">GitHub</a>.
+    </p>
+  </main>
+</BaseLayout>
+
+<style>
+  .landing {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 48px 24px;
+    font-family: var(--font-body, 'Space Mono', monospace);
+    color: var(--color-on-background);
+  }
+  .landing h1 {
+    font-family: var(--font-headline, 'Syne', sans-serif);
+    font-size: clamp(28px, 8vw, 48px);
+    margin: 0 0 16px;
+    color: var(--color-primary);
+  }
+  .landing p {
+    font-size: 16px;
+    line-height: 1.55;
+    margin: 0 0 12px;
+  }
+  .landing a {
+    color: var(--color-primary);
+    font-weight: 700;
+  }
+</style>

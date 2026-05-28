@@ -1,0 +1,18 @@
+[
+  {
+    "slug": "copenhagen-2026",
+    "title": "Copenhagen — family trip",
+    "destination": "Copenhagen, Denmark",
+    "dateRangeStart": "2026-06-01",
+    "dateRangeEnd": "2026-09-30",
+    "pollCloseAt": "2026-06-14T23:59:59+02:00",
+    "organizerToken": "EXAMPLE_ORG_TOKEN_REPLACE",
+    "participants": [
+      { "token": "EXAMPLE_TOKEN_LEO_REPLACE", "name": "Leo" },
+      { "token": "EXAMPLE_TOKEN_SISTER_REPLACE", "name": "Sister" },
+      { "token": "EXAMPLE_TOKEN_DAD_REPLACE", "name": "Dad" },
+      { "token": "EXAMPLE_TOKEN_BROTHER_REPLACE", "name": "Brother" }
+    ],
+    "createdAt": "2026-05-28T00:00:00Z"
+  }
+]

@@ -1,0 +1,38 @@
+{
+  "name": "when-we-go",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "prebuild": "node scripts/prebuild-polls.mjs",
+    "preview": "astro preview",
+    "astro": "astro",
+    "gen-poll": "node scripts/gen-poll.mjs",
+    "verify-isolation": "node scripts/verify-isolation.mjs",
+    "worker:dev": "wrangler dev --local",
+    "worker:deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@tailwindcss/vite": "^4.3.0",
+    "astro": "^6.3.8",
+    "nanoid": "^5.1.11",
+    "qrcode": "^1.5.4",
+    "tailwindcss": "^4.3.0",
+    "wrangler": "^4.95.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
+    "@types/node": "^22.0.0",
+    "pngjs": "^7.0.0",
+    "prettier": "^3.0.0",
+    "prettier-plugin-astro": "^0.14.1",
+    "satori": "^0.26.0",
+    "tsx": "^4.22.3"
+  },
+  "overrides": {
+    "vite": "^7.0.0"
+  }
+}

@@ -1,0 +1,16 @@
+# public/_headers
+# Order: most specific first. Wildcards last.
+
+/admin/*
+  X-Robots-Tag: noindex, nofollow, noarchive
+  Referrer-Policy: no-referrer
+  Cache-Control: private, no-store
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+
+/*
+  X-Robots-Tag: noindex, nofollow, noarchive
+  Referrer-Policy: no-referrer
+  Cache-Control: private, no-store
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff

@@ -1,0 +1,99 @@
+---
+// src/pages/[slug]/[token].astro
+// Phase 1: per-participant page. Greeting + countdown + visual-only calendar.
+// Phase 2 wires up the calendar JS + Worker round-trip.
+import type { GetStaticPaths } from 'astro';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { polls, type Poll, type Participant } from '../../data/polls';
+import PollHeader from '../../components/PollHeader.astro';
+import CalendarGrid from '../../components/CalendarGrid.astro';
+
+export const prerender = true;
+
+export const getStaticPaths = (() => {
+  const paths: Array<{
+    params: { slug: string; token: string };
+    props: { poll: Poll; participant: Participant };
+  }> = [];
+  for (const poll of polls) {
+    for (const participant of poll.participants) {
+      paths.push({
+        params: { slug: poll.slug, token: participant.token },
+        props: { poll, participant },
+      });
+    }
+  }
+  return paths;
+}) satisfies GetStaticPaths;
+
+const { poll, participant } = Astro.props as {
+  poll: Poll;
+  participant: Participant;
+};
+
+// Cross-poll isolation: only this poll's data is in scope. Other polls are
+// not imported or referenced below. (verify-isolation.mjs enforces this.)
+const title = `Hey ${participant.name} — when can you ${poll.destination ? `come to ${poll.destination}` : 'join'}?`;
+---
+
+<BaseLayout
+  title={title}
+  ogDescription={`${poll.title} — pick the days you can come. Poll closes ${poll.pollCloseAt.slice(0, 10)}.`}
+>
+  <main class="page-wrapper">
+    {/* Visually hidden h1 for screen readers — PollHeader provides the visual heading. */}
+    <h1 class="sr-only">Hey {participant.name} — pick your dates for {poll.title}</h1>
+
+    <PollHeader
+      participantName={participant.name}
+      title={poll.title}
+      destination={poll.destination}
+      pollCloseAt={poll.pollCloseAt}
+    />
+
+    <CalendarGrid
+      dateRangeStart={poll.dateRangeStart}
+      dateRangeEnd={poll.dateRangeEnd}
+    />
+
+    <aside class="phase-aside">
+      <p>
+        <strong>Phase 1 preview.</strong> The grid renders the full date
+        range so you can see the shape of the poll. Tapping days to vote
+        (and saving your picks) ships in Phase 2.
+      </p>
+    </aside>
+  </main>
+</BaseLayout>
+
+<style>
+  .page-wrapper {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 24px 16px 48px;
+  }
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  .phase-aside {
+    margin: 24px 0 0;
+    padding: 14px 18px;
+    background: var(--color-surface-container-low);
+    border: 2px dashed var(--color-outline);
+    font-family: var(--font-body, 'Space Mono', monospace);
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--color-on-surface);
+  }
+  .phase-aside strong {
+    color: var(--color-primary);
+  }
+</style>

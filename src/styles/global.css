@@ -1,0 +1,680 @@
+@import "tailwindcss";
+
+/* NOTE: Google Fonts are loaded via <link rel="stylesheet"> in BaseLayout.astro
+   <head>, not via @import here. Tailwind v4 (Lightning CSS) injects its own
+   @layer rules into this file, which makes a CSS-level @import for fonts
+   technically invalid (and noisy at build). The <link> in <head> achieves
+   the same result without the warning. */
+
+/* ──────────────────────────────────────────────────────────────────────
+   when-we-go design system — Barcelona Pixel Dawn (shared with pay-me-back)
+   Chunky 16-bit RPG aesthetic, warm sunset palette, pixel-perfect.
+   Differentiator vs pay-me-back: primary accent is teal (going somewhere)
+   instead of rust (collecting debts).
+   ────────────────────────────────────────────────────────────────────── */
+
+/* Pixel font (self-hosted) */
+@font-face {
+  font-family: "Press Start 2P";
+  src: url("/fonts/PressStart2P-Regular.woff2") format("woff2");
+  font-display: swap;
+  font-weight: 400;
+  font-style: normal;
+  unicode-range: U+0020-007E, U+00A0-00FF;
+}
+
+@theme {
+  /* === Color tokens — Barcelona Pixel Dawn === */
+  /* Surface tones (warm cream → sand) */
+  --color-surface: #fff8ef;
+  --color-surface-bright: #fff8ef;
+  --color-surface-dim: #e6d9b9;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #fff3d5;
+  --color-surface-container: #faedcc;
+  --color-surface-container-high: #f4e7c6;
+  --color-surface-container-highest: #eee2c1;
+  --color-surface-variant: #eee2c1;
+
+  /* Primary — warm teal (when-we-go differentiator: "going somewhere") */
+  --color-primary: #2c8c8c;
+  --color-primary-container: #5cb5b5;
+  --color-primary-fixed: #b8e6e6;
+  --color-primary-fixed-dim: #7fcccc;
+  --color-on-primary: #ffffff;
+  --color-on-primary-container: #003d3d;
+  --color-on-primary-fixed: #001b1b;
+  --color-on-primary-fixed-variant: #004b4b;
+  --color-inverse-primary: #7fcccc;
+
+  /* Secondary — deep terracotta */
+  --color-secondary: #9f4127;
+  --color-secondary-container: #fc8868;
+  --color-secondary-fixed: #ffdbd1;
+  --color-secondary-fixed-dim: #ffb5a1;
+  --color-on-secondary: #ffffff;
+  --color-on-secondary-container: #732109;
+  --color-on-secondary-fixed: #3b0800;
+  --color-on-secondary-fixed-variant: #7f2a12;
+
+  /* Tertiary — deep teal/blue */
+  --color-tertiary: #226583;
+  --color-tertiary-container: #77b3d4;
+  --color-tertiary-fixed: #c3e8ff;
+  --color-tertiary-fixed-dim: #92cef1;
+  --color-on-tertiary: #ffffff;
+  --color-on-tertiary-container: #00455e;
+  --color-on-tertiary-fixed: #001e2c;
+  --color-on-tertiary-fixed-variant: #004c68;
+
+  /* Ink + outline */
+  --color-on-background: #211b07;
+  --color-on-surface: #211b07;
+  --color-on-surface-variant: #524438;
+  --color-outline: #857466;
+  --color-outline-variant: #d8c3b2;
+  --color-inverse-surface: #37301a;
+  --color-inverse-on-surface: #fdf0cf;
+  --color-surface-tint: #2c8c8c;
+
+  /* Background alias */
+  --color-background: #fff8ef;
+
+  /* Error */
+  --color-error: #ba1a1a;
+  --color-error-container: #ffdad6;
+  --color-on-error: #ffffff;
+  --color-on-error-container: #93000a;
+
+  /* Status (HUD elements) */
+  --color-status-online: #4caf50;
+
+  /* === Typography === */
+  --font-pixel: "Press Start 2P", monospace;
+  --font-headline: "Syne", "Helvetica Neue", sans-serif;
+  --font-body: "Space Mono", "Courier New", monospace;
+  --font-label: "JetBrains Mono", "Courier New", monospace;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+
+  /* === Type scale (Stitch design.md) === */
+  --text-label-sm: 12px;
+  --text-label-md: 14px;
+  --text-body-md: 16px;
+  --text-body-lg: 18px;
+  --text-headline-lg-mobile: 24px;
+  --text-headline-lg: 32px;
+  --text-headline-xl: 48px;
+
+  /* === Spacing (4px pixel grid) === */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+
+  /* === Sharp corners only — pixel art means no radius === */
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+}
+
+/* ──────────────────────────────────────────────────────────────────────
+   Base reset + global rendering
+   ────────────────────────────────────────────────────────────────────── */
+@layer base {
+  html {
+    font-family: var(--font-body);
+    color: var(--color-on-background);
+    background: var(--color-background);
+    -webkit-font-smoothing: none;
+    text-rendering: geometricPrecision;
+  }
+  body {
+    line-height: 1.55;
+    image-rendering: pixelated;
+  }
+  /* All pixel-art images crisp */
+  img.pixel,
+  .pixel-art,
+  .sprite,
+  .pixelated {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+  }
+  /* All headings use Syne by default */
+  h1, h2, h3, h4 {
+    font-family: var(--font-headline);
+    font-weight: 700;
+    letter-spacing: -0.5px;
+  }
+  /* Reduce-motion guard — cancel every animation + transition cleanly. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation: none !important;
+      transition: none !important;
+    }
+  }
+}
+
+/* ──────────────────────────────────────────────────────────────────────
+   Pixel-art utility classes (from Stitch HTML, consolidated)
+   ────────────────────────────────────────────────────────────────────── */
+@layer utilities {
+  /* Chunky 4px ink border with inset highlight + shadow */
+  .pixel-border {
+    border: 4px solid var(--color-on-background);
+    box-shadow:
+      inset 4px 4px 0 0 rgba(255, 255, 255, 0.5),
+      inset -4px -4px 0 0 rgba(232, 154, 74, 0.5);
+  }
+
+  /* Same border with offset block shadow (Stitch's "pixel-shadow") */
+  .pixel-border-shadow {
+    border: 4px solid var(--color-on-background);
+    box-shadow: 4px 4px 0 0 var(--color-on-background);
+  }
+
+  /* Heavier shadow for prominent buttons / dialog boxes */
+  .pixel-border-thick {
+    border: 4px solid var(--color-on-background);
+    box-shadow: 6px 6px 0 0 var(--color-on-background);
+  }
+
+  /* Chunky game button — translates on press */
+  .pixel-button {
+    border: 4px solid var(--color-on-background);
+    box-shadow: 4px 4px 0 var(--color-on-background);
+    transition: transform 0.1s steps(2), box-shadow 0.1s steps(2);
+    cursor: pointer;
+  }
+  .pixel-button:hover {
+    transform: translate(2px, 2px);
+    box-shadow: 2px 2px 0 var(--color-on-background);
+  }
+  .pixel-button:active {
+    transform: translate(4px, 4px);
+    box-shadow: none;
+  }
+
+  /* 2-tone bevel — highlight top/left, shadow bottom/right */
+  .pixel-inset {
+    border-top: 4px solid var(--color-on-background);
+    border-left: 4px solid var(--color-on-background);
+    border-bottom: 4px solid var(--color-primary-container);
+    border-right: 4px solid var(--color-primary-container);
+    background-color: var(--color-surface-container-highest);
+  }
+
+  /* Checkerboard dither pattern for shadow/texture overlay */
+  .dither-bg {
+    background-image:
+      linear-gradient(45deg, var(--color-on-background) 25%, transparent 25%, transparent 75%, var(--color-on-background) 75%, var(--color-on-background)),
+      linear-gradient(45deg, var(--color-on-background) 25%, transparent 25%, transparent 75%, var(--color-on-background) 75%, var(--color-on-background));
+    background-size: 8px 8px;
+    background-position: 0 0, 4px 4px;
+    opacity: 0.2;
+  }
+
+  /* Subtle paper-texture dither (lighter version) */
+  .paper-texture {
+    background-image:
+      linear-gradient(45deg, rgba(140, 80, 0, 0.05) 25%, transparent 25%, transparent 75%, rgba(140, 80, 0, 0.05) 75%, rgba(140, 80, 0, 0.05)),
+      linear-gradient(45deg, rgba(140, 80, 0, 0.05) 25%, transparent 25%, transparent 75%, rgba(140, 80, 0, 0.05) 75%, rgba(140, 80, 0, 0.05));
+    background-size: 8px 8px;
+    background-position: 0 0, 4px 4px;
+  }
+
+  /* Speech bubble — RPG dialog with downward-pointing tail */
+  .speech-bubble {
+    position: relative;
+    background: #ffffff;
+    border: 4px solid var(--color-on-background);
+    border-radius: 0;
+    padding: 12px 20px;
+  }
+  .speech-bubble::after {
+    content: '';
+    position: absolute;
+    bottom: -16px;
+    left: 50%;
+    margin-left: -8px;
+    border-width: 16px 16px 0;
+    border-style: solid;
+    border-color: var(--color-on-background) transparent transparent transparent;
+    width: 0;
+  }
+  .speech-bubble::before {
+    content: '';
+    position: absolute;
+    bottom: -10px;
+    left: 50%;
+    margin-left: -5px;
+    border-width: 10px 10px 0;
+    border-style: solid;
+    border-color: #ffffff transparent transparent transparent;
+    width: 0;
+    z-index: 1;
+  }
+
+  /* HP/XP bar fill — diagonal stripes */
+  .xp-bar-container {
+    border: 4px solid var(--color-on-background);
+    background: var(--color-surface);
+    padding: 2px;
+    position: relative;
+    box-shadow: inset 4px 4px 0 rgba(0, 0, 0, 0.1);
+  }
+  .xp-bar-fill {
+    background: repeating-linear-gradient(
+      -45deg,
+      var(--color-primary-container),
+      var(--color-primary-container) 8px,
+      var(--color-secondary-container) 8px,
+      var(--color-secondary-container) 16px
+    );
+    height: 100%;
+    border-right: 2px solid var(--color-on-background);
+  }
+
+  /* Twinkling stars background for Act 2 */
+  .stars-bg {
+    background-image:
+      radial-gradient(2px 2px at 20px 30px, #ffffff, rgba(0, 0, 0, 0)),
+      radial-gradient(2px 2px at 40px 70px, #ffffff, rgba(0, 0, 0, 0)),
+      radial-gradient(2px 2px at 50px 160px, #ffffff, rgba(0, 0, 0, 0)),
+      radial-gradient(2px 2px at 90px 40px, #ffffff, rgba(0, 0, 0, 0)),
+      radial-gradient(2px 2px at 130px 80px, #ffffff, rgba(0, 0, 0, 0)),
+      radial-gradient(2px 2px at 160px 120px, #ffffff, rgba(0, 0, 0, 0)),
+      radial-gradient(2px 2px at 200px 50px, #ffffff, rgba(0, 0, 0, 0)),
+      radial-gradient(2px 2px at 250px 150px, #ffffff, rgba(0, 0, 0, 0));
+    background-size: 300px 300px;
+    animation: twinkle 4s steps(4) infinite alternate;
+  }
+
+  /* Typewriter cursor */
+  .typing-cursor::after {
+    content: '█';
+    display: inline-block;
+    animation: blink 1s step-end infinite;
+    color: var(--color-on-background);
+    margin-left: 4px;
+    vertical-align: middle;
+  }
+
+  /* Bouncing triangle "next" indicator */
+  .next-triangle {
+    width: 0;
+    height: 0;
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-top: 12px solid var(--color-on-background);
+    animation: bounce-triangle 1s steps(2) infinite;
+  }
+
+  /* Animated stepped background (Act 1 hero) */
+  .bg-stepped-anim {
+    animation: bg-step 4s steps(1) infinite;
+    transform-origin: center bottom;
+  }
+
+  /* Float animation for HUD elements */
+  .animate-float {
+    animation: float 2s steps(4) infinite;
+  }
+}
+
+/* ──────────────────────────────────────────────────────────────────────
+   Keyframes
+   ────────────────────────────────────────────────────────────────────── */
+@keyframes twinkle {
+  0%, 100% { opacity: 0.1; }
+  50% { opacity: 0.8; }
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@keyframes bounce-triangle {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(6px); }
+}
+
+@keyframes bg-step {
+  0%   { transform: translate(0, 0) scale(1.05); }
+  25%  { transform: translate(2px, 0) scale(1.05); }
+  50%  { transform: translate(2px, 2px) scale(1.05); }
+  75%  { transform: translate(0, 2px) scale(1.05); }
+  100% { transform: translate(0, 0) scale(1.05); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+@keyframes orbit-plane {
+  0%   { transform: rotate(0deg) translateX(336px) rotate(90deg); }
+  100% { transform: rotate(360deg) translateX(336px) rotate(90deg); }
+}
+
+@keyframes orbit-satellite {
+  0%   { transform: rotate(180deg) translateX(456px) rotate(-180deg); }
+  100% { transform: rotate(540deg) translateX(456px) rotate(-540deg); }
+}
+
+/* Mobile-friendly orbit loops — inner track ~140px, outer ~190px.
+   Plane sprite was flipped horizontally so default head=RIGHT (was LEFT).
+   With NO inner-rotation compensation, the plane naturally rotates WITH the
+   orbital position → head always points in radial-out direction:
+   - 3 o'clock: head RIGHT
+   - 6 o'clock: head DOWN
+   - 9 o'clock: head LEFT
+   - 12 o'clock: head UP
+   (Belly always perpendicular to head, but the radial-out orientation reads
+   as "plane banking with the orbit" which is what Leo asked for.) */
+@keyframes orbit-plane-loop {
+  from { transform: rotate(0deg)   translateX(140px); }
+  to   { transform: rotate(360deg) translateX(140px); }
+}
+
+@keyframes orbit-satellite-loop {
+  from { transform: rotate(0deg)   translateX(190px); }
+  to   { transform: rotate(360deg) translateX(190px); }
+}
+
+/* Desktop overrides — bigger orbit radius matching the bigger tracks */
+@media (min-width: 768px) {
+  @keyframes orbit-plane-loop {
+    from { transform: rotate(0deg)   translateX(240px); }
+    to   { transform: rotate(360deg) translateX(240px); }
+  }
+  @keyframes orbit-satellite-loop {
+    from { transform: rotate(0deg)   translateX(320px); }
+    to   { transform: rotate(360deg) translateX(320px); }
+  }
+}
+
+/* (Robot-arm and earth-rotation sprite-sheet keyframes from pay-me-back's
+   Act 2 orbit scene are NOT ported. when-we-go's hero is a calendar grid,
+   not an orbit. New nano-banana sprites + animations land in Phase 3 polish.) */
+
+/* ──────────────────────────────────────────────────────────────────────
+   Phase 4 — Admin dashboard utilities (utilitarian per D-01)
+   Reuses Barcelona Pixel Dawn color tokens but SKIPS pixel-art borders.
+   Clean 1-2px borders, system fonts, no diagonal stripes, no shadows beyond simple drop.
+   ────────────────────────────────────────────────────────────────────── */
+
+.admin-header h1 {
+  color: var(--color-on-background);
+}
+
+.admin-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--color-outline);
+  background: var(--color-surface-container);
+  color: var(--color-on-background);
+  font-family: var(--font-label);
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.admin-button:hover {
+  background: var(--color-surface-container-high);
+  border-color: var(--color-on-background);
+}
+.admin-button:active {
+  background: var(--color-surface-container-highest);
+}
+.admin-button[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.admin-button.admin-button-paid {
+  background: var(--color-tertiary-container);
+  color: var(--color-on-tertiary-container);
+}
+.admin-button.admin-button-paid:hover {
+  background: var(--color-tertiary);
+  color: var(--color-on-tertiary);
+}
+
+.admin-button.admin-button-reset {
+  background: var(--color-error-container);
+  color: var(--color-on-error-container);
+}
+.admin-button.admin-button-reset:hover {
+  background: var(--color-error);
+  color: var(--color-on-error);
+}
+
+.admin-card {
+  border: 1px solid var(--color-outline-variant);
+  background: var(--color-surface-container-low);
+  padding: 1rem;
+}
+.admin-card-label {
+  font-family: var(--font-label);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-on-surface-variant);
+  margin-bottom: 0.5rem;
+}
+
+/* HP-bar (solid fill per D-01, NOT diagonal stripes like SliderPixel.xp-bar-fill) */
+.admin-hp-bar {
+  width: 100%;
+  height: 16px;
+  border: 1px solid var(--color-on-background);
+  background: var(--color-surface);
+  overflow: hidden;
+}
+.admin-hp-fill {
+  height: 100%;
+  background: var(--color-primary-container);
+  transition: width 0.3s ease;
+}
+.admin-hp-amount {
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--color-on-background);
+  margin-top: 0.5rem;
+}
+
+.admin-breakdown-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.8;
+}
+.admin-breakdown-list li {
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px dashed var(--color-outline-variant);
+  padding: 0.15rem 0;
+}
+.admin-breakdown-list li:last-child { border-bottom: none; }
+
+/* Table */
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-body);
+  font-size: 14px;
+  background: var(--color-surface-container-lowest);
+}
+.admin-table thead {
+  position: sticky;
+  top: 0;
+  background: var(--color-surface-container-high);
+  border-bottom: 2px solid var(--color-on-background);
+  z-index: 1;
+}
+.admin-table th {
+  text-align: left;
+  padding: 0.6rem 0.8rem;
+  font-family: var(--font-label);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-on-surface-variant);
+  white-space: nowrap;
+}
+.admin-table td {
+  padding: 0.65rem 0.8rem;
+  border-bottom: 1px solid var(--color-outline-variant);
+  vertical-align: middle;
+}
+.admin-table tbody tr:hover {
+  background: var(--color-surface-container);
+}
+.admin-table .admin-loading {
+  text-align: center;
+  color: var(--color-on-surface-variant);
+  font-style: italic;
+  padding: 1.5rem;
+}
+.admin-table td.admin-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+/* Status badges (D-02) — small chips with semantic color */
+.status-badge {
+  display: inline-block;
+  padding: 0.15rem 0.55rem;
+  border: 1px solid var(--color-on-background);
+  font-family: var(--font-label);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.status-badge.status-open {
+  background: var(--color-surface);
+  color: var(--color-on-background);
+}
+.status-badge.status-paid {
+  background: var(--color-tertiary-container);
+  color: var(--color-on-tertiary-container);
+  border-color: var(--color-on-tertiary-container);
+}
+.status-badge.status-delayed {
+  background: var(--color-secondary-container);
+  color: var(--color-on-secondary-container);
+  border-color: var(--color-on-secondary-container);
+}
+
+/* Activity log */
+.admin-activity-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  border: 1px solid var(--color-outline-variant);
+  background: var(--color-surface-container-low);
+  font-family: var(--font-body);
+  font-size: 13px;
+}
+.admin-activity-list li {
+  padding: 0.5rem 0.8rem;
+  border-bottom: 1px solid var(--color-outline-variant);
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+.admin-activity-list li:last-child { border-bottom: none; }
+.admin-activity-list li.admin-loading {
+  color: var(--color-on-surface-variant);
+  font-style: italic;
+  justify-content: center;
+}
+.admin-activity-name { font-weight: 700; }
+.admin-activity-modality { color: var(--color-on-surface-variant); }
+.admin-activity-time {
+  margin-left: auto;
+  color: var(--color-on-surface-variant);
+  font-family: var(--font-label);
+  font-size: 12px;
+}
+
+/* Inline error banner */
+.admin-error {
+  border: 1px solid var(--color-error);
+  background: var(--color-error-container);
+  color: var(--color-on-error-container);
+  padding: 0.7rem 1rem;
+  margin-bottom: 1rem;
+  font-family: var(--font-body);
+  font-size: 14px;
+}
+.admin-error[hidden] { display: none; }
+
+/* ──────────────────────────────────────────────────────────────────────
+   Sticky pay-CTA — mobile-only (VIS-03, D-08)
+   Slides in from below after Act 1, hides on desktop + on Act-3-in-view.
+   ────────────────────────────────────────────────────────────────────── */
+@media (max-width: 1023px) {
+  .sticky-pay-cta {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 50;
+    margin: 0 auto;
+    width: calc(100% - 24px);
+    max-width: 420px;
+    min-height: 56px;
+    padding: 12px 20px;
+    background: var(--color-primary-container);
+    color: var(--color-on-background);
+    border: 4px solid var(--color-on-background);
+    border-bottom: none;
+    font-family: var(--font-mono, 'JetBrains Mono', monospace);
+    font-weight: 700;
+    font-size: 16px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    box-shadow: 0 -4px 0 0 rgba(0, 0, 0, 0.15);
+    transform: translateY(0);
+    opacity: 0.96;
+    transition: transform 0.25s ease-out, opacity 0.2s ease-out;
+    /* Mobile safe-area inset for iPhones with home indicator */
+    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .sticky-pay-cta:hover,
+  .sticky-pay-cta:focus-visible {
+    opacity: 1;
+    outline: none;
+    box-shadow: 0 -4px 0 0 rgba(0, 0, 0, 0.25);
+  }
+
+  .sticky-pay-cta--hidden {
+    transform: translateY(120%);
+    opacity: 0;
+    pointer-events: none;
+  }
+}
+
+@media (min-width: 1024px) {
+  .sticky-pay-cta {
+    display: none !important;
+  }
+}

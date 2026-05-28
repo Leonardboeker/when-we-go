@@ -1,0 +1,223 @@
+---
+// src/components/CalendarGrid.astro
+// Phase 1: visual-only calendar. Weeks as rows, days as cells, Mon-first.
+// All cells are disabled <button>s so Phase 2 JS can re-enable them without
+// changing the DOM shape. Sticky month-divider rows segment the grid by month.
+// Weekend cells get a diagonal stripe pattern. Today gets a primary border.
+import {
+  enumerateDays,
+  groupByWeek,
+  isWeekend,
+  isToday,
+  monthHeader,
+  type Week,
+} from '../lib/calendar';
+
+interface Props {
+  dateRangeStart: string;
+  dateRangeEnd: string;
+}
+
+const { dateRangeStart, dateRangeEnd } = Astro.props;
+
+const allDays = enumerateDays(dateRangeStart, dateRangeEnd);
+const weeks: Week[] = groupByWeek(allDays);
+
+// Walk the weeks and inject a month-divider whenever the first non-null cell
+// of a week starts a new calendar month.
+type Row =
+  | { kind: 'month'; label: string }
+  | { kind: 'week'; week: Week };
+
+const rows: Row[] = [];
+let lastMonthKey = '';
+for (const week of weeks) {
+  // Find the first real day in the week (skip nulls).
+  const firstReal = week.days.find((d): d is string => d !== null);
+  if (firstReal) {
+    const monthKey = firstReal.slice(0, 7); // YYYY-MM
+    if (monthKey !== lastMonthKey) {
+      rows.push({ kind: 'month', label: monthHeader(firstReal) });
+      lastMonthKey = monthKey;
+    }
+  }
+  rows.push({ kind: 'week', week });
+}
+
+const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+---
+
+<section
+  class="calendar-grid"
+  aria-label="Date availability grid"
+  data-poll-start={dateRangeStart}
+  data-poll-end={dateRangeEnd}
+>
+  <div class="calendar-weekdays" aria-hidden="true">
+    {WEEKDAY_LABELS.map((label) => (
+      <div class={['calendar-weekday', (label === 'Sat' || label === 'Sun') && 'is-weekend'].filter(Boolean).join(' ')}>
+        {label}
+      </div>
+    ))}
+  </div>
+
+  <div class="calendar-rows" role="grid">
+    {rows.map((row) =>
+      row.kind === 'month' ? (
+        <div class="calendar-month-divider" role="row">
+          <span>{row.label}</span>
+        </div>
+      ) : (
+        <div class="calendar-week" role="row">
+          {row.week.days.map((day) =>
+            day === null ? (
+              <div class="calendar-cell calendar-cell-pad" role="gridcell" aria-hidden="true"></div>
+            ) : (
+              <button
+                type="button"
+                class={[
+                  'calendar-cell',
+                  'calendar-cell-day',
+                  isWeekend(day) && 'is-weekend',
+                  isToday(day) && 'is-today',
+                ].filter(Boolean).join(' ')}
+                role="gridcell"
+                aria-label={`${day} — not yet votable (Phase 1 preview)`}
+                data-date={day}
+                data-state="unset"
+                disabled
+              >
+                <span class="calendar-cell-day-num">
+                  {Number(day.slice(8))}
+                </span>
+              </button>
+            )
+          )}
+        </div>
+      )
+    )}
+  </div>
+
+  <p class="calendar-phase-note">
+    <span aria-hidden="true">🚧</span>
+    Phase 1 preview — tap-to-vote wiring lands in Phase 2.
+  </p>
+</section>
+
+<style>
+  .calendar-grid {
+    margin: 0 0 24px;
+    font-family: var(--font-body, 'Space Mono', monospace);
+    color: var(--color-on-background);
+  }
+  .calendar-weekdays {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+    padding: 0 0 8px;
+    border-bottom: 2px solid var(--color-on-background);
+    margin-bottom: 8px;
+  }
+  .calendar-weekday {
+    font-family: var(--font-label, 'JetBrains Mono', monospace);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    text-align: center;
+    color: var(--color-on-surface-variant);
+  }
+  .calendar-weekday.is-weekend {
+    color: var(--color-primary);
+  }
+  .calendar-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .calendar-month-divider {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--color-surface-container-high);
+    border-top: 2px solid var(--color-on-background);
+    border-bottom: 2px solid var(--color-on-background);
+    padding: 6px 10px;
+    margin: 8px 0 4px;
+    font-family: var(--font-label, 'JetBrains Mono', monospace);
+    font-size: 12px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+  }
+  .calendar-week {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+  }
+  .calendar-cell {
+    aspect-ratio: 1 / 1;
+    min-height: 40px;
+    border: 2px solid var(--color-outline);
+    background: var(--color-surface-container-lowest);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-label, 'JetBrains Mono', monospace);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--color-on-background);
+    cursor: not-allowed;
+    padding: 0;
+    transition: transform 0.1s ease, background 0.1s ease;
+  }
+  .calendar-cell-pad {
+    visibility: hidden;
+    border: none;
+    background: transparent;
+    min-height: 0;
+  }
+  .calendar-cell-day-num {
+    line-height: 1;
+  }
+  .calendar-cell.is-weekend {
+    background-image: repeating-linear-gradient(
+      -45deg,
+      var(--color-surface-container-lowest) 0 4px,
+      var(--color-surface-container) 4px 8px
+    );
+  }
+  .calendar-cell.is-today {
+    border: 2px solid var(--color-primary);
+    box-shadow: inset 0 0 0 2px var(--color-primary);
+    color: var(--color-primary);
+  }
+  .calendar-cell[disabled] {
+    cursor: not-allowed;
+    opacity: 0.85;
+  }
+
+  .calendar-phase-note {
+    margin: 16px 0 0;
+    padding: 8px 12px;
+    background: var(--color-surface-container-low);
+    border: 1px dashed var(--color-outline);
+    font-family: var(--font-label, 'JetBrains Mono', monospace);
+    font-size: 12px;
+    color: var(--color-on-surface-variant);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    text-align: center;
+  }
+
+  /* Desktop polish: wider cells, slightly bigger type. */
+  @media (min-width: 640px) {
+    .calendar-cell {
+      min-height: 56px;
+      font-size: 15px;
+    }
+    .calendar-weekday {
+      font-size: 12px;
+    }
+  }
+</style>

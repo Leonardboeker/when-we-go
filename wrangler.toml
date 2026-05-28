@@ -1,0 +1,41 @@
+# wrangler.toml — Cloudflare Worker config for the when-we-go API.
+# Phase 1: this is a stub. The Worker only answers `{ phase: 1, ready: false }`
+# until Phase 2 wires up the vote endpoints.
+name = "when-we-go-api"
+main = "worker/index.ts"
+compatibility_date = "2024-09-23"
+
+# ────────────────────────────────────────────────────────────────────────────
+# Custom domain route (optional but recommended).
+# Comment this block out if you only want the worker on its *.workers.dev URL.
+# zone_name MUST be a domain you own and that's configured in Cloudflare DNS.
+# ────────────────────────────────────────────────────────────────────────────
+[[routes]]
+pattern = "when.YOUR_DOMAIN.com/api/*"
+zone_name = "YOUR_DOMAIN.com"
+
+# ────────────────────────────────────────────────────────────────────────────
+# Durable Object binding — one DO instance per poll (keyed by slug).
+# SQLite-backed (free tier as of 2026-01). Phase 2 fills in the schema.
+# ────────────────────────────────────────────────────────────────────────────
+[[durable_objects.bindings]]
+name = "WHENWEGO_DO"
+class_name = "WhenWeGoPollDO"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["WhenWeGoPollDO"]
+
+[vars]
+# Phase deadline marker — flipped by the prebuild scripts of each phase.
+# Phase 1 ships with the Worker stub returning ready=false; Phase 2 flips this.
+WHENWEGO_PHASE = "1"
+
+# ────────────────────────────────────────────────────────────────────────────
+# Secrets — set via: npx wrangler secret put <NAME>
+# (Do NOT put real values here — this file is committed.)
+#
+#   WHENWEGO_POLLS_JSON           JSON-stringified array of poll objects
+#   WHENWEGO_TELEGRAM_BOT_TOKEN   Optional — bot token from @BotFather
+#   WHENWEGO_TELEGRAM_CHAT_ID     Optional — chat id that receives notifications
+# ────────────────────────────────────────────────────────────────────────────

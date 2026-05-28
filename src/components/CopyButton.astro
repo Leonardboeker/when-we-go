@@ -1,0 +1,81 @@
+---
+// src/components/CopyButton.astro
+// Reusable copy button with 1.5s "Kopiert!" feedback + aria-live polite.
+// Per UI-SPEC §9.3 + RESEARCH §Q6.
+interface Props {
+  value: string;       // Value written to clipboard (stripped IBAN for IBAN fields)
+  label: string;       // aria-label: "IBAN kopieren", "BIC kopieren", etc.
+  variant?: 'inline' | 'wide';  // inline = icon button; wide = full-width secondary
+  successLabel?: string;
+}
+const {
+  value,
+  label,
+  variant = 'inline',
+  successLabel = '✓ Copied!',
+} = Astro.props;
+---
+
+<button
+  type="button"
+  class:list={[
+    'copy-btn',
+    'cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2',
+    variant === 'wide'
+      ? 'w-full mt-4 py-3 px-4 pixel-button uppercase tracking-wide'
+      : 'inline-flex items-center justify-center min-h-11 min-w-11 px-3 py-2 pixel-border-shadow uppercase tracking-wide',
+  ]}
+  style={
+    variant === 'wide'
+      ? 'background: var(--color-surface-container-high); color: var(--color-on-background); font-family: var(--font-label); font-weight: 700; font-size: 13px;'
+      : 'background: var(--color-surface-container); color: var(--color-on-background); font-family: var(--font-label); font-weight: 700; font-size: 12px; box-shadow: 2px 2px 0 var(--color-on-background);'
+  }
+  aria-label={label}
+  data-value={value}
+  data-success={successLabel}
+>
+  <span class="copy-default">
+    {variant === 'wide' ? '📋 Copy all 4 fields' : '📋 Copy'}
+  </span>
+  <!-- sr-only live region fallback: aria-live="polite" announces copy success to screen readers
+       when the page-level #copy-live region is unavailable (e.g. embedded contexts) -->
+  <span class="copy-sr-live sr-only" aria-live="polite" aria-atomic="true"></span>
+</button>
+
+<script>
+  import { copyToClipboard } from '../lib/copy';
+
+  document.querySelectorAll<HTMLButtonElement>('button.copy-btn').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const value = btn.dataset.value ?? '';
+      const successLabel = btn.dataset.success ?? '✓ Copied!';
+      const defaultSpan = btn.querySelector<HTMLElement>('.copy-default');
+      const ok = await copyToClipboard(value);
+
+      if (!ok) {
+        // Clipboard blocked — show manual-copy hint (UI-SPEC §12 verbatim)
+        const hint = document.createElement('span');
+        hint.className = 'text-xs text-on-surface-variant mt-1 block font-[Space_Mono]';
+        hint.textContent = "Couldn't copy — select the value by hand.";
+        btn.parentElement?.insertAdjacentElement('afterend', hint);
+        setTimeout(() => hint.remove(), 4000);
+        return;
+      }
+
+      if (defaultSpan) {
+        const originalText = defaultSpan.textContent ?? '';
+        defaultSpan.textContent = successLabel;
+        // Use inline style to access CSS var
+        btn.style.setProperty('background', 'var(--color-primary-container)');
+        // Announce to screen-reader live region
+        const liveRegion = document.getElementById('copy-live') ?? btn.querySelector('.copy-sr-live');
+        if (liveRegion) liveRegion.textContent = `${btn.getAttribute('aria-label')} — copied`;
+        setTimeout(() => {
+          defaultSpan.textContent = originalText;
+          btn.style.removeProperty('background');
+          if (liveRegion) liveRegion.textContent = '';
+        }, 1500);
+      }
+    });
+  });
+</script>

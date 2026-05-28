@@ -1,0 +1,29 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+<BaseLayout title="Not found — when-we-go">
+  <main class="not-found">
+    <h1>404</h1>
+    <p>Nothing here. Check the link you were sent.</p>
+  </main>
+</BaseLayout>
+
+<style>
+  .not-found {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 48px 24px;
+    text-align: center;
+    font-family: var(--font-body, 'Space Mono', monospace);
+    color: var(--color-on-background);
+  }
+  .not-found h1 {
+    font-family: var(--font-pixel, 'Press Start 2P', monospace);
+    font-size: clamp(40px, 12vw, 80px);
+    margin: 0 0 16px;
+    color: var(--color-primary);
+  }
+  .not-found p {
+    font-size: 16px;
+  }
+</style>
