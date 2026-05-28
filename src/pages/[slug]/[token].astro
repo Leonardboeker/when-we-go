@@ -43,6 +43,7 @@ const publicApiBase =
 
 <BaseLayout
   title={title}
+  ogImage={`/og/${poll.slug}.png`}
   ogDescription={`${poll.title} — pick the days you can come. Poll closes ${poll.pollCloseAt.slice(0, 10)}.`}
 >
   <main class="page-wrapper">

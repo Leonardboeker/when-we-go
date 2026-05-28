@@ -33,7 +33,11 @@ const publicApiBase =
   (import.meta.env.WHENWEGO_PUBLIC_API_BASE as string | undefined) ?? '';
 ---
 
-<BaseLayout title={`${poll.title} — admin`}>
+<BaseLayout
+  title={`${poll.title} — admin`}
+  ogImage={`/og/${poll.slug}.png`}
+  ogDescription={`Organiser view for ${poll.title}. Live overlap + who has voted.`}
+>
   <main class="admin-page">
     <header class="admin-header">
       <p class="admin-eyebrow">Organiser dashboard</p>
