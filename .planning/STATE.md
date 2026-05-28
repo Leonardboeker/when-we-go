@@ -4,43 +4,78 @@
 
 ## Current
 
-- **Status:** Phase 3 (Polish + Public Release) complete — repo is public, demo is live, template marker on
+- **Status:** MVP shipped (Phases 1-3). Phases 4-10 fully scoped + per-phase CONTEXT.md ready. Awaiting decision on which to build next.
 - **Active phase:** none
-- **Next step:** Leo runs the real Copenhagen poll for his family (`npm run gen-poll`, edit `data/polls.json`, deploy)
+- **Next step:** pick a phase to start (recommended order: 4 → 8 → 9 → 5 → 6 → 7 → 10, see `ROADMAP.md`)
 
-## Phase status
+## Phase status overview
 
-| Phase | Status | Note |
+| # | Phase | Status | Doc |
+|---|---|---|---|
+| 1 | Foundation | ✅ done | `phases/01-foundation/` |
+| 2 | Date Polling + Auto-Close | ✅ done | `phases/02-polling-and-close/` |
+| 3 | Polish + Public Release | ✅ done | `phases/03-polish/` |
+| 4 | Participant Profile | 📋 CONTEXT ready | `phases/04-participant-profile/04-CONTEXT.md` |
+| 5 | Flight Search (Amadeus) | 📋 CONTEXT ready | `phases/05-flight-search/05-CONTEXT.md` |
+| 6 | Hotel Search (Amadeus) | 📋 CONTEXT ready | `phases/06-hotel-search/06-CONTEXT.md` |
+| 7 | Activity Suggestions (Claude) | 📋 CONTEXT ready | `phases/07-activity-suggestions/07-CONTEXT.md` |
+| 8 | Email + iCal Close-Summary | 📋 CONTEXT ready | `phases/08-email-and-ical/08-CONTEXT.md` |
+| 9 | Reminder Schedule | 📋 CONTEXT ready | `phases/09-reminder-schedule/09-CONTEXT.md` |
+| 10 | pay-me-back Integration | 📋 CONTEXT ready | `phases/10-paymeback-integration/10-CONTEXT.md` |
+
+`📋 CONTEXT ready` = decisions locked, ready for `/gsd:plan-phase NN` → `/gsd:execute-phase NN` to build it.
+
+## Master docs
+
+- [`VISION.md`](./VISION.md) — full picture, user flow end to end, API choices with justification, cost model
+- [`ROADMAP.md`](./ROADMAP.md) — all 12 phases, dependencies, suggested execution order
+- [`PROJECT.md`](./PROJECT.md) — original pitch
+- [`REQUIREMENTS.md`](./REQUIREMENTS.md) — MVP requirements (Phases 1-3 covered)
+
+## What's needed from Leo to start each phase
+
+| Phase | Manual setup | Time |
 |---|---|---|
-| 1 — Foundation | ✅ done | Astro project, token model, per-token + admin pages, isolation verified |
-| 2 — Date Polling + Auto-Close | ✅ done | Worker + DO + 5 API endpoints + hourly cron + Telegram pipeline + interactive calendar grid + admin dashboard |
-| 3 — Polish + Documentation | ✅ done | Banner, polished README, OG images, demo at when-we-go-demo.pages.dev, repo flipped public + marked as template |
+| 4 | nothing | autonomous |
+| 5 | Amadeus dev account (free) + 2 secrets | 5 min |
+| 6 | nothing (reuses Phase 5 key) | autonomous |
+| 7 | Anthropic API key + 1 secret | 5 min |
+| 8 | Resend account + verified sender domain (or use sandbox) + 2 secrets | 15 min (or 2 min sandbox) |
+| 9 | nothing | autonomous |
+| 10 | nothing | autonomous |
 
 ## Recent activity log
 
-- 2026-05-28 — Project initialised. PROJECT.md, REQUIREMENTS.md, ROADMAP.md, STATE.md written.
-- 2026-05-28 — Real driver: Leo + sister + father + brother → Copenhagen trip in summer 2026.
-- 2026-05-28 — Phase 1 shipped via subagent: 7 static pages, cross-poll isolation verified, sibling cross-link to pay-me-back.
-- 2026-05-29 — Phase 2 shipped via subagent: Worker, DO, 5 API endpoints, hourly cron, Telegram pipeline, interactive calendar grid, admin dashboard. 14/14 smoke tests green against `wrangler dev`. Env var inconsistency (`POLLS_JSON` → `WHENWEGO_POLLS_JSON`) caught + fixed.
-- 2026-05-29 — Phase 3 shipped: nano-banana banner (`public/banner.png`), polished 449-line README mirroring pay-me-back's structure, per-poll OG image generator (`src/pages/og/[slug].png.ts`, Satori + Resvg), deployed demo to https://when-we-go-demo.pages.dev with `WHENWEGO_DEMO_MODE=true` yellow banner. Repo flipped public + marked as GitHub Template. 10 topics added. All 5 deployed-demo endpoints (root, participant, admin, OG image, banner) verified 200.
+- 2026-05-28 — Project initialised. MVP scope: date polling only.
+- 2026-05-28 — Real driver: Leo + sister + father + brother → Copenhagen trip.
+- 2026-05-28 — Phase 1 (Foundation) shipped.
+- 2026-05-29 — Phase 2 (Vote Persistence + Auto-Close) shipped. 14/14 smoke green.
+- 2026-05-29 — Phase 3 (Polish + Public Release) shipped. Demo live at when-we-go-demo.pages.dev, repo flipped public + template.
+- 2026-05-29 — **Vision expanded**: scope extended from MVP date-polling to full trip planner with personalised proposals (flights/hotels/activities) + email notifications + iCal calendar invites + reminder schedule + pay-me-back integration. `VISION.md` written, `ROADMAP.md` expanded from 3 to 12 phases, per-phase CONTEXT.md drafted for Phases 4-10. No code changes yet — planning artifacts only.
 
-## What's not done (out of MVP scope, future work)
+## What to do next
 
-- AI trip suggestions (Cloudflare AI Workers binding — free tier)
-- Booking platform deep-links (Booking.com, Airbnb search for locked dates)
-- pay-me-back integration (closed-poll button → spawn pay-me-back instance pre-populated with participants)
-- Drag-to-range selection in calendar grid
-- Multi-poll dashboards (only worth it if Leo runs > 1 poll)
-- Real-time vote updates via SSE (current polling-on-focus is good enough)
-- Resend email fallback for adopters without Telegram
+Pick one:
 
-## For Leo's actual Copenhagen poll
+**Option A — most useful path** (1.5 weeks of work spread out):
+1. Phase 4 (Profile) — 1 day, autonomous
+2. Phase 8 (Email + iCal) — 2 days, needs Resend key
+3. Phase 9 (Reminders) — 1 day, autonomous
+4. Phase 5 (Flights) — 2 days, needs Amadeus key
+5. Phase 6 (Hotels) — 1 day, reuses Amadeus
+6. Phase 7 (Activities) — 1 day, needs Anthropic key
+7. Phase 10 (pay-me-back export) — 2 days, autonomous
 
-When ready to run the real thing:
+After Phase 9: real Copenhagen trip can launch — dates lock, calendar invites + reminders go out. Phases 5-7 layer in proposals; not blocking.
 
-1. `cd D:\dev\when-we-go`
-2. `npm run gen-poll -- --slug copenhagen --title "Copenhagen — family" --destination "Copenhagen, Denmark" --start 2026-06-15 --end 2026-09-15 --close 2026-06-08T23:59:59+02:00 --participants "Leo,Lea,Papa,Bro"`
-3. Paste the printed JSON into `data/polls.json` (local only — gitignored).
-4. Set the same JSON as `WHENWEGO_POLLS_JSON` secret in CF Pages dashboard + via `npx wrangler secret put WHENWEGO_POLLS_JSON`.
-5. Optional: `npx wrangler secret put WHENWEGO_TELEGRAM_BOT_TOKEN` + `WHENWEGO_TELEGRAM_CHAT_ID` for pings.
-6. `npx wrangler deploy` (Worker) + `npx wrangler pages deploy dist --project-name=when-we-go` (separate from the demo project).
+**Option B — start with the email piece (your explicit ask)**:
+- Skip 4-7 for now
+- Build Phase 8 with empty flights/hotels/activities (close-summary still works — dates + calendar links + reminders preview)
+- Then Phase 9 reminders
+- Defer 5/6/7 until you decide if they're worth the API setup
+
+**Option C — just Phase 4 to start**:
+- Sets up the substrate (email + airport)
+- Decide what to do next based on how that lands
+
+Tell me which option to start with.
