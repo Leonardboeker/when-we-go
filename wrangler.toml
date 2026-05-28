@@ -1,6 +1,5 @@
 # wrangler.toml — Cloudflare Worker config for the when-we-go API.
-# Phase 1: this is a stub. The Worker only answers `{ phase: 1, ready: false }`
-# until Phase 2 wires up the vote endpoints.
+# Phase 2: live vote endpoints + SQLite-backed Durable Object + hourly cron.
 name = "when-we-go-api"
 main = "worker/index.ts"
 compatibility_date = "2024-09-23"
@@ -16,20 +15,26 @@ zone_name = "YOUR_DOMAIN.com"
 
 # ────────────────────────────────────────────────────────────────────────────
 # Durable Object binding — one DO instance per poll (keyed by slug).
-# SQLite-backed (free tier as of 2026-01). Phase 2 fills in the schema.
+# SQLite-backed (free tier as of 2026-01). Schema lives in worker/durable-object.ts.
 # ────────────────────────────────────────────────────────────────────────────
 [[durable_objects.bindings]]
-name = "WHENWEGO_DO"
+name = "WHENWEGO_POLL_DO"
 class_name = "WhenWeGoPollDO"
 
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["WhenWeGoPollDO"]
 
+# ────────────────────────────────────────────────────────────────────────────
+# Hourly cron — checks every poll, auto-closes overdue ones, fires close
+# notification. Logic lives in worker/scheduled.ts (CONTEXT A-06).
+# ────────────────────────────────────────────────────────────────────────────
+[triggers]
+crons = ["0 * * * *"]
+
 [vars]
-# Phase deadline marker — flipped by the prebuild scripts of each phase.
-# Phase 1 ships with the Worker stub returning ready=false; Phase 2 flips this.
-WHENWEGO_PHASE = "1"
+# Phase marker — flipped by the prebuild scripts of each phase.
+WHENWEGO_PHASE = "2"
 
 # ────────────────────────────────────────────────────────────────────────────
 # Secrets — set via: npx wrangler secret put <NAME>

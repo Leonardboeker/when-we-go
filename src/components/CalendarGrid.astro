@@ -78,18 +78,19 @@ const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
                 class={[
                   'calendar-cell',
                   'calendar-cell-day',
+                  'cell-unset',
                   isWeekend(day) && 'is-weekend',
                   isToday(day) && 'is-today',
                 ].filter(Boolean).join(' ')}
                 role="gridcell"
-                aria-label={`${day} — not yet votable (Phase 1 preview)`}
+                aria-label={`${day} — tap to cycle vote`}
                 data-date={day}
                 data-state="unset"
-                disabled
               >
                 <span class="calendar-cell-day-num">
                   {Number(day.slice(8))}
                 </span>
+                <span class="calendar-cell-badge" aria-hidden="true"></span>
               </button>
             )
           )}
@@ -98,10 +99,14 @@ const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     )}
   </div>
 
-  <p class="calendar-phase-note">
-    <span aria-hidden="true">🚧</span>
-    Phase 1 preview — tap-to-vote wiring lands in Phase 2.
-  </p>
+  <div class="calendar-status" aria-live="polite">
+    <span class="calendar-legend">
+      <span class="calendar-legend-item"><span class="calendar-legend-swatch swatch-yes"></span> Yes</span>
+      <span class="calendar-legend-item"><span class="calendar-legend-swatch swatch-maybe"></span> Maybe</span>
+      <span class="calendar-legend-item"><span class="calendar-legend-swatch swatch-no"></span> No</span>
+    </span>
+    <span class="calendar-status-msg" data-calendar-status></span>
+  </div>
 </section>
 
 <style>
@@ -196,18 +201,95 @@ const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     cursor: not-allowed;
     opacity: 0.85;
   }
+  .calendar-cell-day {
+    cursor: pointer;
+    position: relative;
+  }
+  .calendar-cell-day:hover:not([disabled]):not(.cell-readonly) {
+    transform: translateY(-1px);
+  }
+  .calendar-cell-day:active:not([disabled]):not(.cell-readonly) {
+    transform: translateY(0);
+  }
+  .calendar-cell-badge {
+    position: absolute;
+    top: 2px;
+    right: 4px;
+    font-size: 10px;
+    font-weight: 800;
+    line-height: 1;
+    pointer-events: none;
+  }
+  /* Vote state visuals — JS toggles cell-yes / cell-maybe / cell-no / cell-unset */
+  .cell-yes {
+    background: var(--color-primary);
+    color: var(--color-on-primary, #fff);
+    border-color: var(--color-primary);
+  }
+  .cell-yes.is-weekend {
+    background-image: none;
+  }
+  .cell-maybe {
+    background-image: repeating-linear-gradient(
+      -45deg,
+      var(--color-surface-container) 0 4px,
+      var(--color-surface-container-high) 4px 8px
+    );
+    color: var(--color-on-background);
+    border-color: var(--color-on-background);
+  }
+  .cell-no {
+    background: var(--color-surface-container-lowest);
+    color: var(--color-on-surface-variant);
+    border-color: var(--color-outline);
+    opacity: 0.55;
+    text-decoration: line-through;
+  }
+  .cell-unset {
+    background: var(--color-surface-container-lowest);
+  }
+  /* Post-close overlap badges */
+  .cell-perfect .calendar-cell-badge::after { content: '✓'; color: var(--color-primary); }
+  .cell-witheffort .calendar-cell-badge::after { content: '~'; color: var(--color-on-surface); }
+  .cell-oneshort .calendar-cell-badge::after { content: '·'; color: var(--color-on-surface-variant); }
+  .cell-readonly {
+    cursor: default;
+    pointer-events: none;
+  }
 
-  .calendar-phase-note {
-    margin: 16px 0 0;
-    padding: 8px 12px;
-    background: var(--color-surface-container-low);
-    border: 1px dashed var(--color-outline);
+  .calendar-status {
+    margin: 12px 0 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 16px;
     font-family: var(--font-label, 'JetBrains Mono', monospace);
     font-size: 12px;
     color: var(--color-on-surface-variant);
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    text-align: center;
+  }
+  .calendar-legend {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+  }
+  .calendar-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .calendar-legend-swatch {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border: 1px solid var(--color-on-background);
+  }
+  .swatch-yes { background: var(--color-primary); }
+  .swatch-maybe { background-image: repeating-linear-gradient(-45deg, var(--color-surface-container) 0 3px, var(--color-surface-container-high) 3px 6px); }
+  .swatch-no { background: var(--color-surface-container-lowest); }
+  .calendar-status-msg {
+    font-weight: 700;
+    color: var(--color-primary);
   }
 
   /* Desktop polish: wider cells, slightly bigger type. */

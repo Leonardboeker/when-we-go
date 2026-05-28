@@ -1,8 +1,6 @@
 ---
 // src/pages/[slug]/admin/[token].astro
-// Phase 1: organiser dashboard skeleton. One static path per poll, keyed by
-// organizerToken. Wrong tokens 404 because no file is generated for them.
-// Phase 2 wires in the Worker API for real vote aggregation.
+// Phase 2: organiser dashboard. Static skeleton + live data via /api/admin/poll.
 import type { GetStaticPaths } from 'astro';
 import BaseLayout from '../../../layouts/BaseLayout.astro';
 import { polls, type Poll } from '../../../data/polls';
@@ -30,6 +28,9 @@ const closeLabel = new Date(poll.pollCloseAt).toLocaleString('en-GB', {
   minute: '2-digit',
   timeZoneName: 'short',
 });
+
+const publicApiBase =
+  (import.meta.env.WHENWEGO_PUBLIC_API_BASE as string | undefined) ?? '';
 ---
 
 <BaseLayout title={`${poll.title} — admin`}>
@@ -57,11 +58,9 @@ const closeLabel = new Date(poll.pollCloseAt).toLocaleString('en-GB', {
         <div>
           <dt>Status</dt>
           <dd>
-            {closed ? (
-              <span class="status-badge status-delayed">Closed</span>
-            ) : (
-              <span class="status-badge status-open">{days} day{days === 1 ? '' : 's'} left</span>
-            )}
+            <span class="status-badge status-open" data-admin-status>
+              {closed ? 'Closed' : `${days} day${days === 1 ? '' : 's'} left`}
+            </span>
           </dd>
         </div>
         <div>
@@ -75,23 +74,36 @@ const closeLabel = new Date(poll.pollCloseAt).toLocaleString('en-GB', {
       </dl>
     </section>
 
-    <section class="admin-section" aria-label="Best dates">
-      <h2>Best dates</h2>
-      <div class="admin-card admin-empty">
-        <p>
-          <strong>Phase 2 fills this in.</strong>
-          Once participants start voting, this panel shows the days everyone
-          can come, sorted by overlap.
-        </p>
+    <section class="admin-section" aria-label="Viable ranges">
+      <div class="admin-section-head">
+        <h2>Viable date ranges</h2>
+        <span class="admin-section-hint" data-admin-overlap-hint>Loading…</span>
+      </div>
+      <div class="admin-card" data-admin-ranges>
+        <p class="admin-empty"><em>Fetching aggregate from API…</em></p>
+      </div>
+    </section>
+
+    <section class="admin-section" aria-label="Per-date breakdown">
+      <div class="admin-section-head">
+        <h2>Per-date breakdown</h2>
+      </div>
+      <div class="admin-card admin-perdate" data-admin-perdate>
+        <p class="admin-empty"><em>Loading…</em></p>
       </div>
     </section>
 
     <section class="admin-section" aria-label="Participants">
       <div class="admin-section-head">
         <h2>Participants</h2>
-        <button type="button" class="admin-button" id="refresh-btn" disabled aria-disabled="true">
-          Refresh (Phase 2)
-        </button>
+        <div class="admin-actions">
+          <button type="button" class="admin-button" data-admin-refresh>
+            Refresh
+          </button>
+          <button type="button" class="admin-button admin-button-danger" data-admin-close>
+            Force close
+          </button>
+        </div>
       </div>
       <table class="admin-table">
         <thead>
@@ -99,13 +111,15 @@ const closeLabel = new Date(poll.pollCloseAt).toLocaleString('en-GB', {
             <th scope="col">Name</th>
             <th scope="col">Status</th>
             <th scope="col">Picks</th>
+            <th scope="col">Last vote</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody data-admin-voters>
           {poll.participants.map((p) => (
-            <tr>
+            <tr data-token={p.token}>
               <td>{p.name}</td>
               <td><span class="status-badge status-open">No votes yet</span></td>
+              <td><span class="admin-cell-placeholder">—</span></td>
               <td><span class="admin-cell-placeholder">—</span></td>
             </tr>
           ))}
@@ -113,13 +127,181 @@ const closeLabel = new Date(poll.pollCloseAt).toLocaleString('en-GB', {
       </table>
     </section>
 
-    <p class="admin-foot-note">
-      <span aria-hidden="true">🚧</span>
-      Phase 1: the admin dashboard renders metadata + the participant list.
-      Vote aggregation comes online in Phase 2 once the Worker + Durable Object
-      are wired up.
+    <p class="admin-foot-note" data-admin-foot>
+      Auto-refreshes every 30 seconds.
     </p>
   </main>
+
+  <script
+    is:inline
+    define:vars={{
+      slug: poll.slug,
+      organizerToken: poll.organizerToken,
+      apiBase: publicApiBase,
+    }}
+  >
+    (function () {
+      'use strict';
+      const REFRESH_MS = 30_000;
+      let pollTimer = null;
+      let isClosed = false;
+
+      const statusEl = document.querySelector('[data-admin-status]');
+      const overlapHintEl = document.querySelector('[data-admin-overlap-hint]');
+      const rangesEl = document.querySelector('[data-admin-ranges]');
+      const perDateEl = document.querySelector('[data-admin-perdate]');
+      const votersEl = document.querySelector('[data-admin-voters]');
+      const refreshBtn = document.querySelector('[data-admin-refresh]');
+      const closeBtn = document.querySelector('[data-admin-close]');
+      const footEl = document.querySelector('[data-admin-foot]');
+
+      /** @param {number|null} ts */
+      function fmtTs(ts) {
+        if (!ts) return '—';
+        const d = new Date(ts);
+        return d.toLocaleString('en-GB', {
+          day: '2-digit',
+          month: 'short',
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+      }
+
+      /** @param {{voterStatus:Array<any>, overlap:any, closed:boolean, closedAt:string|null}} data */
+      function render(data) {
+        isClosed = !!data.closed;
+        if (statusEl) {
+          statusEl.textContent = isClosed ? 'Closed' : statusEl.textContent;
+        }
+
+        // Voters table
+        if (votersEl) {
+          for (const v of data.voterStatus) {
+            const row = votersEl.querySelector('tr[data-token="' + v.token + '"]');
+            if (!row) continue;
+            const tds = row.querySelectorAll('td');
+            if (tds.length < 4) continue;
+            // status badge
+            tds[1].innerHTML = v.hasVoted
+              ? '<span class="status-badge status-paid">Voted</span>'
+              : '<span class="status-badge status-open">No votes yet</span>';
+            tds[2].textContent = String(v.voteCount || 0);
+            tds[3].textContent = fmtTs(v.lastVotedAt);
+          }
+        }
+
+        // Viable ranges
+        const ranges = (data.overlap && data.overlap.ranges) || [];
+        const perfect = ranges.filter((r) => r.tier === 'perfect');
+        const withEffort = ranges.filter((r) => r.tier === 'withEffort');
+        const oneShort = ranges.filter((r) => r.tier === 'oneShort');
+        if (overlapHintEl) {
+          overlapHintEl.textContent =
+            perfect.length + ' perfect / ' + withEffort.length + ' with-effort / ' + oneShort.length + ' one-short';
+        }
+        if (rangesEl) {
+          if (ranges.length === 0) {
+            rangesEl.innerHTML = '<p class="admin-empty">No multi-day overlaps yet.</p>';
+          } else {
+            const parts = [];
+            for (const [label, arr] of [['Perfect', perfect], ['With effort', withEffort], ['One short', oneShort]]) {
+              if (arr.length === 0) continue;
+              parts.push('<h3 class="admin-range-tier">' + label + '</h3><ul class="admin-range-list">');
+              for (const r of arr) {
+                parts.push('<li>' + r.start + ' → ' + r.end + ' <em>(' + r.length + ' days)</em></li>');
+              }
+              parts.push('</ul>');
+            }
+            rangesEl.innerHTML = parts.join('');
+          }
+        }
+
+        // Per-date stacked bars
+        if (perDateEl && data.overlap && data.overlap.perDate) {
+          const perDate = data.overlap.perDate;
+          const dates = Object.keys(perDate).sort();
+          const parts = ['<div class="admin-perdate-list">'];
+          for (const d of dates) {
+            const bd = perDate[d];
+            const total = bd.yes + bd.maybe + bd.no + bd.unvoted;
+            if (total === 0) continue;
+            const w = (n) => total === 0 ? 0 : (n / total) * 100;
+            parts.push(
+              '<div class="admin-perdate-row">' +
+                '<span class="admin-perdate-date">' + d + '</span>' +
+                '<div class="admin-perdate-bar">' +
+                  '<span class="bar-yes" style="width:' + w(bd.yes) + '%" title="yes: ' + bd.yes + '"></span>' +
+                  '<span class="bar-maybe" style="width:' + w(bd.maybe) + '%" title="maybe: ' + bd.maybe + '"></span>' +
+                  '<span class="bar-no" style="width:' + w(bd.no) + '%" title="no: ' + bd.no + '"></span>' +
+                  '<span class="bar-unvoted" style="width:' + w(bd.unvoted) + '%" title="unvoted: ' + bd.unvoted + '"></span>' +
+                '</div>' +
+                '<span class="admin-perdate-meta">' + bd.yes + '/' + (total - bd.unvoted) + '/' + total + '</span>' +
+              '</div>'
+            );
+          }
+          parts.push('</div>');
+          perDateEl.innerHTML = parts.join('');
+        }
+
+        if (footEl) {
+          footEl.textContent = isClosed
+            ? 'Poll closed at ' + (data.closedAt || '?') + '.'
+            : 'Auto-refreshes every 30 seconds.';
+        }
+        if (closeBtn) closeBtn.disabled = isClosed;
+      }
+
+      async function fetchOnce() {
+        try {
+          const url = apiBase + '/api/admin/poll?slug=' + encodeURIComponent(slug);
+          const res = await fetch(url, {
+            headers: { 'X-Organizer-Token': organizerToken, Accept: 'application/json' },
+          });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const data = await res.json();
+          render(data);
+        } catch (err) {
+          if (footEl) footEl.textContent = 'Refresh failed: ' + (err && err.message);
+        }
+      }
+
+      function startPolling() {
+        stopPolling();
+        if (isClosed) return;
+        pollTimer = setInterval(fetchOnce, REFRESH_MS);
+      }
+      function stopPolling() {
+        if (pollTimer) clearInterval(pollTimer);
+        pollTimer = null;
+      }
+
+      if (refreshBtn) {
+        refreshBtn.addEventListener('click', fetchOnce);
+      }
+      if (closeBtn) {
+        closeBtn.addEventListener('click', async () => {
+          if (!confirm('Close this poll now? This cannot be undone.')) return;
+          try {
+            const url = apiBase + '/api/admin/close?slug=' + encodeURIComponent(slug);
+            const res = await fetch(url, {
+              method: 'POST',
+              headers: { 'X-Organizer-Token': organizerToken, Accept: 'application/json' },
+            });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            await fetchOnce();
+            stopPolling();
+          } catch (err) {
+            alert('Close failed: ' + (err && err.message));
+          }
+        });
+      }
+
+      fetchOnce().then(startPolling);
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') fetchOnce();
+      });
+    })();
+  </script>
 </BaseLayout>
 
 <style>
@@ -130,9 +312,7 @@ const closeLabel = new Date(poll.pollCloseAt).toLocaleString('en-GB', {
     font-family: var(--font-body, 'Space Mono', monospace);
     color: var(--color-on-background);
   }
-  .admin-header {
-    margin: 0 0 24px;
-  }
+  .admin-header { margin: 0 0 24px; }
   .admin-eyebrow {
     font-family: var(--font-label, 'JetBrains Mono', monospace);
     font-size: 12px;
@@ -151,20 +331,14 @@ const closeLabel = new Date(poll.pollCloseAt).toLocaleString('en-GB', {
     color: var(--color-on-surface-variant);
     font-size: 14px;
   }
-  .admin-meta {
-    margin: 0 0 24px;
-  }
+  .admin-meta { margin: 0 0 24px; }
   .admin-meta-grid {
     margin: 0;
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     gap: 14px 20px;
   }
-  .admin-meta-grid > div {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
+  .admin-meta-grid > div { display: flex; flex-direction: column; gap: 4px; }
   .admin-meta-grid dt {
     font-family: var(--font-label, 'JetBrains Mono', monospace);
     font-size: 11px;
@@ -172,39 +346,38 @@ const closeLabel = new Date(poll.pollCloseAt).toLocaleString('en-GB', {
     letter-spacing: 0.08em;
     color: var(--color-on-surface-variant);
   }
-  .admin-meta-grid dd {
-    margin: 0;
-    font-size: 14px;
-    font-weight: 600;
-  }
+  .admin-meta-grid dd { margin: 0; font-size: 14px; font-weight: 600; }
   .admin-meta-grid code {
     font-family: var(--font-label, 'JetBrains Mono', monospace);
     font-size: 13px;
     background: var(--color-surface-container);
     padding: 2px 6px;
   }
-  .admin-section {
-    margin: 0 0 24px;
-  }
+  .admin-section { margin: 0 0 24px; }
   .admin-section-head {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
     margin: 0 0 10px;
+    flex-wrap: wrap;
   }
   .admin-section h2 {
     margin: 0;
     font-family: var(--font-headline, 'Syne', sans-serif);
     font-size: 20px;
   }
-  .admin-empty p {
+  .admin-section-hint {
+    font-family: var(--font-label, 'JetBrains Mono', monospace);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-on-surface-variant);
+  }
+  .admin-empty {
     margin: 0;
     font-size: 14px;
     color: var(--color-on-surface-variant);
-  }
-  .admin-empty strong {
-    color: var(--color-primary);
   }
   .admin-cell-placeholder {
     color: var(--color-on-surface-variant);
@@ -220,5 +393,125 @@ const closeLabel = new Date(poll.pollCloseAt).toLocaleString('en-GB', {
     color: var(--color-on-surface-variant);
     text-transform: uppercase;
     letter-spacing: 0.05em;
+  }
+  .admin-actions {
+    display: inline-flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .admin-button {
+    font-family: var(--font-label, 'JetBrains Mono', monospace);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 8px 12px;
+    border: 2px solid var(--color-on-background);
+    background: var(--color-surface-container);
+    color: var(--color-on-background);
+    cursor: pointer;
+    box-shadow: 2px 2px 0 var(--color-on-background);
+  }
+  .admin-button:active { transform: translate(2px, 2px); box-shadow: none; }
+  .admin-button[disabled] {
+    opacity: 0.4;
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+  .admin-button-danger {
+    background: var(--color-error-container, #fdd);
+    color: var(--color-on-error-container, #410e0b);
+  }
+  .admin-range-tier {
+    margin: 12px 0 4px;
+    font-family: var(--font-label, 'JetBrains Mono', monospace);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-on-surface-variant);
+  }
+  .admin-range-tier:first-child { margin-top: 0; }
+  .admin-range-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-family: var(--font-body, 'Space Mono', monospace);
+    font-size: 14px;
+  }
+  .admin-perdate-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .admin-perdate-row {
+    display: grid;
+    grid-template-columns: 110px 1fr 80px;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--font-label, 'JetBrains Mono', monospace);
+    font-size: 12px;
+  }
+  .admin-perdate-bar {
+    display: flex;
+    height: 14px;
+    border: 1px solid var(--color-on-background);
+    background: var(--color-surface-container-lowest);
+  }
+  .admin-perdate-bar > span { display: block; height: 100%; }
+  .bar-yes { background: var(--color-primary); }
+  .bar-maybe { background-image: repeating-linear-gradient(-45deg, var(--color-surface-container) 0 3px, var(--color-surface-container-high) 3px 6px); }
+  .bar-no { background: var(--color-surface-container-highest); opacity: 0.6; }
+  .bar-unvoted { background: transparent; }
+  .admin-perdate-meta {
+    color: var(--color-on-surface-variant);
+    text-align: right;
+    font-size: 11px;
+  }
+  .admin-card {
+    padding: 16px 18px;
+    background: var(--color-surface-container-low);
+    border: 2px solid var(--color-outline);
+  }
+  .admin-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--font-body, 'Space Mono', monospace);
+    font-size: 14px;
+  }
+  .admin-table th,
+  .admin-table td {
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--color-outline);
+  }
+  .admin-table th {
+    font-family: var(--font-label, 'JetBrains Mono', monospace);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-on-surface-variant);
+  }
+  .status-badge {
+    display: inline-block;
+    font-family: var(--font-label, 'JetBrains Mono', monospace);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 3px 8px;
+    border: 1px solid var(--color-on-background);
+  }
+  .status-open {
+    background: var(--color-surface-container);
+    color: var(--color-on-background);
+  }
+  .status-delayed {
+    background: var(--color-surface-container-high);
+    color: var(--color-on-surface);
+  }
+  .status-paid {
+    background: var(--color-primary);
+    color: var(--color-on-primary, #fff);
   }
 </style>
