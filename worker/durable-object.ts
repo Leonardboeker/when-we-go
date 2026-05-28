@@ -124,6 +124,28 @@ export class WhenWeGoPollDO extends DurableObject {
         updated_at       INTEGER NOT NULL
       );
     `);
+    // Phase 9 — reminder idempotency tracker. PRIMARY KEY (token, type) means
+    // we can never double-send the same reminder type to the same participant.
+    this.sql.exec(`
+      CREATE TABLE IF NOT EXISTS reminders_sent (
+        token        TEXT NOT NULL,
+        type         TEXT NOT NULL,
+        sent_at      INTEGER NOT NULL,
+        status       TEXT NOT NULL,
+        error        TEXT,
+        PRIMARY KEY (token, type)
+      );
+    `);
+    // Phase 9 (forward-compat) — generic key/value cache used for
+    // expiring lookups (e.g. weather forecast 6h TTL). Phase 5 will reuse
+    // for Amadeus proposal caching.
+    this.sql.exec(`
+      CREATE TABLE IF NOT EXISTS proposal_cache (
+        key          TEXT PRIMARY KEY,
+        value        TEXT NOT NULL,
+        expires_at   INTEGER NOT NULL
+      );
+    `);
   }
 
   // Bulk-replace votes for a token in one DO method call (CONTEXT A-04).
@@ -278,6 +300,105 @@ export class WhenWeGoPollDO extends DurableObject {
       .toArray() as unknown as ProfileRow[];
     return rows.map((r) => ({ token: r.token, ...rowToProfile(r) }));
   }
+
+  // ─── Phase 9: reminder send tracker ─────────────────────────────────
+  // PRIMARY KEY (token, type) guarantees only one row per pair.
+  // `wasReminderSent` returns true only when the existing row's status is
+  // 'sent' — failed/skipped rows let us retry on the next cron tick.
+
+  wasReminderSent(token: string, type: ReminderType): boolean {
+    const rows = this.sql
+      .exec(
+        `SELECT status FROM reminders_sent WHERE token = ? AND type = ? LIMIT 1`,
+        token,
+        type
+      )
+      .toArray() as Array<{ status: string }>;
+    if (rows.length === 0) return false;
+    return rows[0].status === 'sent';
+  }
+
+  markReminderSent(
+    token: string,
+    type: ReminderType,
+    status: ReminderStatus,
+    error?: string
+  ): void {
+    const now = Date.now();
+    this.sql.exec(
+      `INSERT INTO reminders_sent (token, type, sent_at, status, error)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(token, type) DO UPDATE SET
+         sent_at = excluded.sent_at,
+         status  = excluded.status,
+         error   = excluded.error`,
+      token,
+      type,
+      now,
+      status,
+      error ?? null
+    );
+  }
+
+  getReminderStatus(): ReminderStatusRow[] {
+    return this.sql
+      .exec(
+        `SELECT token, type, sent_at, status, error
+         FROM reminders_sent
+         ORDER BY token ASC, type ASC`
+      )
+      .toArray() as unknown as ReminderStatusRow[];
+  }
+
+  clearReminder(token: string, type: ReminderType): void {
+    this.sql.exec(
+      `DELETE FROM reminders_sent WHERE token = ? AND type = ?`,
+      token,
+      type
+    );
+  }
+
+  // ─── Phase 9: generic proposal_cache (also reusable by Phase 5) ──────
+  // Stores time-bound JSON blobs. `getCached` returns null on miss + on
+  // expired rows (and lazy-deletes the expired row).
+  getCached(key: string): string | null {
+    const rows = this.sql
+      .exec(
+        `SELECT value, expires_at FROM proposal_cache WHERE key = ? LIMIT 1`,
+        key
+      )
+      .toArray() as Array<{ value: string; expires_at: number }>;
+    if (rows.length === 0) return null;
+    if (rows[0].expires_at <= Date.now()) {
+      this.sql.exec(`DELETE FROM proposal_cache WHERE key = ?`, key);
+      return null;
+    }
+    return rows[0].value;
+  }
+
+  setCached(key: string, value: string, ttlMs: number): void {
+    const expiresAt = Date.now() + ttlMs;
+    this.sql.exec(
+      `INSERT INTO proposal_cache (key, value, expires_at) VALUES (?, ?, ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value, expires_at = excluded.expires_at`,
+      key,
+      value,
+      expiresAt
+    );
+  }
+}
+
+// Phase 9 reminder-type literal — kept as a union string so cron + admin
+// callsites get type-safety even though SQLite stores it as plain TEXT.
+export type ReminderType = 'T-30' | 'T-7' | 'T-1' | 'T+1';
+export type ReminderStatus = 'sent' | 'failed' | 'skipped_no_email';
+
+export interface ReminderStatusRow {
+  token: string;
+  type: ReminderType;
+  sent_at: number;
+  status: ReminderStatus;
+  error: string | null;
 }
 
 function rowToProfile(r: ProfileRow): ParticipantProfile {

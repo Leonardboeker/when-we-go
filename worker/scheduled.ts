@@ -12,11 +12,17 @@ import type {
   WhenWeGoPollDO,
   VoteRecord,
   ParticipantProfile,
+  ReminderType,
 } from './durable-object';
 import { loadPolls } from './lib/polls-config';
 import { computeOverlap, type VoteRow } from './lib/overlap';
 import { notifyPollClose } from './lib/notify-pipeline';
 import { fanOutCloseSummaryEmails } from './lib/close-email-fanout';
+import { computeTripStart } from './lib/trip-date';
+import { isInReminderWindow } from './lib/reminder-window';
+import { fanOutReminders } from './lib/reminder-fanout';
+
+const ALL_REMINDER_TYPES: ReminderType[] = ['T-30', 'T-7', 'T-1', 'T+1'];
 
 export async function handleScheduled(
   _event: ScheduledController,
@@ -57,6 +63,14 @@ export async function handleScheduled(
       const { closedAt } = await stub.closeNow(JSON.stringify(overlap));
       console.log(`[cron] closed ${poll.slug} at ${new Date(closedAt).toISOString()}`);
 
+      // Phase 9: persist trip_start in poll_meta so the reminder cron loop
+      // doesn't have to recompute every tick. Empty string means "no viable
+      // trip" — reminder loop sees that and skips. Pass `poll` as fallback
+      // so polls with no overlap consensus still get the planned start date
+      // (organiser can clear-reminder + re-close if dates shift).
+      const tripStart = computeTripStart(overlap, poll);
+      await stub.setMeta('trip_start', tripStart ?? '');
+
       // Idempotency: only notify if not already notified.
       const notifiedAt = await stub.getMeta('close_notified_at');
       if (!notifiedAt) {
@@ -86,6 +100,35 @@ export async function handleScheduled(
       }
     } catch (err) {
       console.error(`[cron] error processing poll ${poll.slug}`, err);
+    }
+  }
+
+  // Phase 9: reminder-check loop. Walks every poll, asks the DO for
+  // poll_meta.trip_start, and for each reminder type that's currently inside
+  // its ±1h window, fires the fan-out via ctx.waitUntil. Idempotency lives in
+  // the fan-out itself (reminders_sent table) — no need to track here.
+  for (const poll of polls) {
+    try {
+      const stub = env.WHENWEGO_POLL_DO.get(
+        env.WHENWEGO_POLL_DO.idFromName(poll.slug)
+      ) as unknown as DurableObjectStub<WhenWeGoPollDO>;
+
+      const tripStart = await stub.getMeta('trip_start');
+      if (!tripStart) continue; // either not closed or no viable trip
+
+      for (const type of ALL_REMINDER_TYPES) {
+        if (!isInReminderWindow(now, tripStart as string, type)) continue;
+        ctx.waitUntil(
+          fanOutReminders({ env, poll, type, ctx }).catch((err) => {
+            console.error(
+              `[cron] reminder fan-out failed for ${poll.slug}/${type}`,
+              err
+            );
+          })
+        );
+      }
+    } catch (err) {
+      console.error(`[cron] reminder loop error for ${poll.slug}`, err);
     }
   }
 }

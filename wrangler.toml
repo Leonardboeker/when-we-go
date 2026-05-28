@@ -34,7 +34,7 @@ crons = ["0 * * * *"]
 
 [vars]
 # Phase marker — flipped by the prebuild scripts of each phase.
-WHENWEGO_PHASE = "8"
+WHENWEGO_PHASE = "9"
 # Default absolute site URL used to build links inside outbound emails.
 # In production, override via `wrangler secret put WHENWEGO_SITE_URL` with the
 # real domain (e.g. https://when.your-domain.com). Local dev default below.

@@ -14,8 +14,13 @@
 //     GET  /api/ical               personalised .ics (token-gated)
 //     GET  /ical/<slug>.ics        public minimal .ics (no token)
 //     POST /api/admin/resend-close-summary  re-fire close-summary emails
+//   Phase 9:
+//     GET  /api/admin/reminder-status  per-participant per-type sent status
+//     POST /api/admin/send-reminder    force-fire a specific reminder type
+//     POST /api/admin/clear-reminder   clear one reminder row (force re-send)
 //
-// Cron: hourly auto-close per wrangler.toml.
+// Cron: hourly auto-close per wrangler.toml. Also drives the reminder cron
+// (Phase 9, scheduled.ts) using the same trigger — no new cron required.
 import { WhenWeGoPollDO, type Env } from './durable-object';
 import { Router } from './lib/router';
 import { corsHeaders, errorResponse, jsonResponse } from './lib/cors';
@@ -26,6 +31,9 @@ import { handleAdminPoll } from './handlers/admin-poll';
 import { handleAdminClose } from './handlers/admin-close';
 import { handleIcal, handlePublicIcal } from './handlers/ical';
 import { handleAdminResendSummary } from './handlers/admin-resend-summary';
+import { handleAdminReminderStatus } from './handlers/admin-reminders';
+import { handleAdminSendReminder } from './handlers/admin-send-reminder';
+import { handleAdminClearReminder } from './handlers/admin-clear-reminder';
 import { handleScheduled } from './scheduled';
 
 export { WhenWeGoPollDO };
@@ -34,8 +42,8 @@ const router = new Router();
 
 router.get('/api/health', (req, _env, _ctx) => {
   const env = _env as Env;
-  // Phase number reflects the most-recent shipped phase. Bumped from 2 → 8.
-  return jsonResponse({ ok: true, phase: 8 }, { status: 200 }, req, env);
+  // Phase number reflects the most-recent shipped phase. Bumped 8 → 9.
+  return jsonResponse({ ok: true, phase: 9 }, { status: 200 }, req, env);
 });
 
 router.get('/api/poll', (req, env, ctx) =>
@@ -58,6 +66,15 @@ router.get('/api/ical', (req, env, ctx) =>
 );
 router.post('/api/admin/resend-close-summary', (req, env, ctx) =>
   handleAdminResendSummary(req, env as Env, ctx)
+);
+router.get('/api/admin/reminder-status', (req, env, ctx) =>
+  handleAdminReminderStatus(req, env as Env, ctx)
+);
+router.post('/api/admin/send-reminder', (req, env, ctx) =>
+  handleAdminSendReminder(req, env as Env, ctx)
+);
+router.post('/api/admin/clear-reminder', (req, env, ctx) =>
+  handleAdminClearReminder(req, env as Env, ctx)
 );
 
 export default {

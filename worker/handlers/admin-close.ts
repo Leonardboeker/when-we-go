@@ -13,6 +13,7 @@ import { findPoll, validateOrganizerToken } from '../lib/polls-config';
 import { computeOverlap, type VoteRow } from '../lib/overlap';
 import { notifyPollClose } from '../lib/notify-pipeline';
 import { fanOutCloseSummaryEmails } from '../lib/close-email-fanout';
+import { computeTripStart } from '../lib/trip-date';
 
 export async function handleAdminClose(
   req: Request,
@@ -58,6 +59,13 @@ export async function handleAdminClose(
     allVotes.map((v) => ({ token: v.token, date: v.date, state: v.state })) as VoteRow[]
   );
   const { closedAt } = await stub.closeNow(JSON.stringify(overlap));
+
+  // Phase 9: persist trip_start so the reminder cron can fire without
+  // recomputing overlap on every tick. Empty string = no viable trip.
+  // Poll passed as fallback (see trip-date.ts) — covers polls without
+  // consensus by defaulting to poll.dateRangeStart.
+  const tripStart = computeTripStart(overlap, poll);
+  await stub.setMeta('trip_start', tripStart ?? '');
 
   // Mark notification as sent (idempotency for cron) + fire Telegram best-effort.
   await stub.setMeta('close_notified_at', String(closedAt));

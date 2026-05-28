@@ -20,6 +20,8 @@ import { addDaysIso, buildICalForPoll } from './ical';
 import { buildAllCalendarLinks } from './calendar-links';
 import { renderCloseSummaryEmail } from './email-templates';
 import { sendEmail } from './notify-pipeline';
+import { computeTripStart } from './trip-date';
+import type { WhenWeGoPollDO } from '../durable-object';
 
 export interface FanOutInput {
   env: Env;
@@ -54,6 +56,23 @@ export async function fanOutCloseSummaryEmails(
   args: FanOutInput
 ): Promise<FanOutResult> {
   const { env, poll, overlap, profilesByToken, ctx, awaitAll = false } = args;
+
+  // Phase 9: belt-and-braces — also persist trip_start here. Cron + admin-close
+  // already do this, but admin-resend-close-summary calls into us without
+  // setting it; ensure the reminder pipeline always has a value to read.
+  try {
+    const tripStart = computeTripStart(overlap, poll);
+    const stub = env.WHENWEGO_POLL_DO.get(
+      env.WHENWEGO_POLL_DO.idFromName(poll.slug)
+    ) as unknown as DurableObjectStub<WhenWeGoPollDO>;
+    await stub.setMeta('trip_start', tripStart ?? '');
+  } catch (err) {
+    // Non-fatal — close-summary still goes out.
+    console.error(
+      `[fanout] could not persist trip_start for ${poll.slug}`,
+      err
+    );
+  }
 
   // Determine the trip date span used in BOTH .ics + calendar-links.
   const featured = pickRange(overlap);

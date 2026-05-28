@@ -459,6 +459,90 @@ if (!ORG_TOKEN || PARTICIPANTS.length === 0) {
   });
 }
 
+// (7) Phase 9 — reminders (status + force-send + clear)
+console.log('\n(7) Reminder flow:');
+if (!ORG_TOKEN || PARTICIPANTS.length === 0) {
+  await check('GET /api/admin/reminder-status', async () => ({ skip: 'needs SMOKE_ORGANIZER_TOKEN + SMOKE_TOKENS' }));
+} else {
+  const me = PARTICIPANTS[0];
+
+  await check('GET /api/admin/reminder-status with org token -> 200 + { ok, tripStart, status[] }', async () => {
+    const { status, json } = await fetchJson(
+      `${BASE}/api/admin/reminder-status?slug=${encodeURIComponent(SLUG)}`,
+      { headers: { 'X-Organizer-Token': ORG_TOKEN } }
+    );
+    if (status !== 200) return `status ${status}`;
+    if (!json || json.ok !== true) return 'ok flag missing';
+    if (!Array.isArray(json.status)) return 'status not array';
+    // tripStart should be a non-empty string post-close (we closed in step 4).
+    if (typeof json.tripStart !== 'string' || !json.tripStart) {
+      return `tripStart=${json.tripStart} expected non-empty string post-close`;
+    }
+    return true;
+  });
+
+  await check('GET /api/admin/reminder-status with WRONG org token -> 404', async () => {
+    const { status } = await fetchJson(
+      `${BASE}/api/admin/reminder-status?slug=${encodeURIComponent(SLUG)}`,
+      { headers: { 'X-Organizer-Token': 'wrong-org-token-NEVER-valid' } }
+    );
+    if (status !== 404) return `status ${status} expected 404`;
+    return true;
+  });
+
+  await check('POST /api/admin/send-reminder?type=T-7 -> 200 + { ok, sent, skipped, failed }', async () => {
+    const { status, json } = await fetchJson(
+      `${BASE}/api/admin/send-reminder?slug=${encodeURIComponent(SLUG)}&type=T-7`,
+      { method: 'POST', headers: { 'X-Organizer-Token': ORG_TOKEN } }
+    );
+    if (status !== 200) return `status ${status} body=${JSON.stringify(json)}`;
+    if (!json || json.ok !== true) return 'ok flag missing';
+    if (typeof json.sent !== 'number') return `sent not number: ${json.sent}`;
+    if (typeof json.skipped !== 'number') return `skipped not number: ${json.skipped}`;
+    if (typeof json.failed !== 'number') return `failed not number: ${json.failed}`;
+    console.log(`        [info] reminder send result: sent=${json.sent} skipped=${json.skipped} failed=${json.failed} errors=${JSON.stringify(json.errors)}`);
+    // After the send, status table should have a row for our participant + T-7
+    const { json: statusJson } = await fetchJson(
+      `${BASE}/api/admin/reminder-status?slug=${encodeURIComponent(SLUG)}`,
+      { headers: { 'X-Organizer-Token': ORG_TOKEN } }
+    );
+    const row = (statusJson?.status || []).find((r) => r.token === me.token && r.type === 'T-7');
+    if (!row) return `no reminders_sent row for token=${me.token} type=T-7`;
+    if (!['sent', 'failed', 'skipped_no_email'].includes(row.status)) {
+      return `unexpected row.status=${row.status}`;
+    }
+    return true;
+  });
+
+  await check('POST /api/admin/send-reminder with INVALID type -> 400', async () => {
+    const { status } = await fetchJson(
+      `${BASE}/api/admin/send-reminder?slug=${encodeURIComponent(SLUG)}&type=NOPE`,
+      { method: 'POST', headers: { 'X-Organizer-Token': ORG_TOKEN } }
+    );
+    if (status !== 400) return `status ${status} expected 400`;
+    return true;
+  });
+
+  await check('POST /api/admin/clear-reminder -> 200 { ok, cleared:true }', async () => {
+    const { status, json } = await fetchJson(
+      `${BASE}/api/admin/clear-reminder?slug=${encodeURIComponent(SLUG)}&token=${encodeURIComponent(me.token)}&type=T-7`,
+      { method: 'POST', headers: { 'X-Organizer-Token': ORG_TOKEN } }
+    );
+    if (status !== 200) return `status ${status}`;
+    if (!json || json.ok !== true || json.cleared !== true) return `unexpected body: ${JSON.stringify(json)}`;
+    return true;
+  });
+
+  await check('POST /api/admin/clear-reminder with WRONG org token -> 404', async () => {
+    const { status } = await fetchJson(
+      `${BASE}/api/admin/clear-reminder?slug=${encodeURIComponent(SLUG)}&token=${encodeURIComponent(me.token)}&type=T-7`,
+      { method: 'POST', headers: { 'X-Organizer-Token': 'wrong-org-token-NEVER-valid' } }
+    );
+    if (status !== 404) return `status ${status} expected 404`;
+    return true;
+  });
+}
+
 const elapsed = ((Date.now() - started) / 1000).toFixed(2);
 console.log('\n' + '-'.repeat(60));
 console.log(`[smoke] ${pass} passed, ${fail} failed, ${skipped} skipped (${elapsed}s)`);
