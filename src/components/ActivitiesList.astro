@@ -1,0 +1,231 @@
+---
+// src/components/ActivitiesList.astro
+// Phase 7 — post-close curated activity list widget. Hidden on SSR; the parent
+// [token].astro page IIFE reveals + populates it after /api/activities resolves.
+//
+// Wire-up:
+//   - Two sections: "Happening this week" + "Always great"
+//   - Type icons per item (🎵 🎨 🏛️ 🍽️ 🌳 🏰 🏘️ 🎉 🔮)
+//   - Confidence badges on medium/low items (ℹ verify dates / ⚠ check schedule)
+//   - DEMO banner when provider.isReal === false
+//   - Refresh button visible to organisers only (gated by `mode` prop)
+---
+
+<section
+  id="activities-list"
+  class="activities-list"
+  hidden
+  aria-labelledby="activities-title"
+>
+  <div class="activities-header">
+    <h2 id="activities-title" class="activities-title">
+      Things to do
+    </h2>
+    <button
+      type="button"
+      class="activities-refresh"
+      data-activities-refresh
+      hidden
+    >
+      Refresh
+    </button>
+  </div>
+
+  <div class="activities-demo-banner" data-activities-demo-banner hidden>
+    <strong>📍 DEMO activity data</strong> — Claude API key not configured.
+    Suggestions are from a deterministic mock; set
+    <code>WHENWEGO_ANTHROPIC_API_KEY</code> for real Haiku-curated picks.
+  </div>
+
+  <p class="activities-meta" data-activities-meta hidden></p>
+
+  <div class="activities-state" data-activities-state hidden>
+    <p data-activities-state-text></p>
+  </div>
+
+  <div class="activities-section" data-activities-thisweek-section hidden>
+    <h3 class="activities-section-title">Happening this week</h3>
+    <ul class="activities-items" data-activities-thisweek></ul>
+  </div>
+
+  <div class="activities-section" data-activities-alwaysgreat-section hidden>
+    <h3 class="activities-section-title">Always great</h3>
+    <ul class="activities-items" data-activities-alwaysgreat></ul>
+  </div>
+
+  <p class="activities-disclaimer">
+    Curated by Claude Haiku — double-check specific dates + prices on the
+    venue website before booking.
+  </p>
+</section>
+
+<style>
+  .activities-list {
+    margin: 24px 0;
+    padding: 16px;
+    background: var(--color-surface, #fff);
+    border: 3px solid var(--color-on-background, #1c1b1f);
+    box-shadow: 4px 4px 0 var(--color-primary, #6750a4);
+  }
+  .activities-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .activities-title {
+    margin: 0;
+    font-family: var(--font-label, 'JetBrains Mono', monospace);
+    font-size: 14px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .activities-refresh {
+    appearance: none;
+    border: 2px solid var(--color-on-background, #1c1b1f);
+    background: var(--color-primary-container, #eaddff);
+    color: var(--color-on-primary-container, #21005d);
+    padding: 6px 12px;
+    font-family: var(--font-label, 'JetBrains Mono', monospace);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+  }
+  .activities-refresh:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  .activities-meta {
+    margin: 0 0 12px 0;
+    font-size: 12px;
+    color: var(--color-on-surface-variant, #49454f);
+  }
+  .activities-demo-banner {
+    margin: 0 0 12px 0;
+    padding: 10px 12px;
+    font-size: 13px;
+    line-height: 1.4;
+    background: repeating-linear-gradient(
+      45deg,
+      #fff7d6,
+      #fff7d6 8px,
+      #ffeaa0 8px,
+      #ffeaa0 16px
+    );
+    border: 2px solid #1c1b1f;
+    color: #1c1b1f;
+  }
+  .activities-demo-banner code {
+    font-size: 11px;
+    background: #fff;
+    padding: 1px 4px;
+    border: 1px solid #888;
+  }
+  .activities-state {
+    margin: 0 0 12px 0;
+    padding: 12px;
+    background: var(--color-surface-variant, #f3edf7);
+    border: 2px dashed var(--color-on-background, #1c1b1f);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .activities-section {
+    margin-top: 16px;
+  }
+  .activities-section-title {
+    margin: 0 0 8px 0;
+    font-family: var(--font-label, 'JetBrains Mono', monospace);
+    font-size: 12px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-primary, #6750a4);
+  }
+  .activities-items {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 8px;
+  }
+  .activity-card {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 2px solid var(--color-on-background, #1c1b1f);
+    background: #fff;
+    align-items: start;
+  }
+  .activity-card.is-medium {
+    background: #fffaf0;
+  }
+  .activity-card.is-low {
+    background: #fff3f3;
+    border-style: dashed;
+  }
+  .activity-card-icon {
+    font-size: 22px;
+    line-height: 1.1;
+  }
+  .activity-card-body {
+    min-width: 0;
+  }
+  .activity-card-name {
+    margin: 0 0 2px 0;
+    font-size: 14px;
+    font-weight: 800;
+  }
+  .activity-card-why {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--color-on-surface-variant, #49454f);
+  }
+  .activity-card-meta {
+    margin: 4px 0 0 0;
+    font-size: 11px;
+    font-family: var(--font-label, 'JetBrains Mono', monospace);
+    color: var(--color-on-surface-variant, #49454f);
+  }
+  .activity-card-right {
+    text-align: right;
+    font-family: var(--font-label, 'JetBrains Mono', monospace);
+    font-size: 11px;
+    color: var(--color-on-surface-variant, #49454f);
+  }
+  .activity-card-price {
+    font-weight: 900;
+    font-size: 14px;
+    color: var(--color-on-background, #1c1b1f);
+  }
+  .activity-confidence-badge {
+    display: inline-block;
+    margin-top: 4px;
+    padding: 2px 6px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border: 1px solid #1c1b1f;
+  }
+  .activity-confidence-badge.is-medium {
+    background: #fff7d6;
+    color: #5a4500;
+  }
+  .activity-confidence-badge.is-low {
+    background: #ffd9d9;
+    color: #6a0000;
+  }
+  .activities-disclaimer {
+    margin: 12px 0 0 0;
+    font-size: 11px;
+    color: var(--color-on-surface-variant, #49454f);
+    font-style: italic;
+  }
+</style>

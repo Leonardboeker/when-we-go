@@ -33,6 +33,11 @@ export interface Env {
   WHENWEGO_AMADEUS_CLIENT_ID?: string;
   WHENWEGO_AMADEUS_CLIENT_SECRET?: string;
   WHENWEGO_AMADEUS_ENV?: string;
+  // Phase 7 — Anthropic Claude API key for activity suggestions.
+  // When unset, getActivityProvider() returns the MockActivityProvider
+  // (deterministic per-destination evergreen lookup). When set, the real
+  // ClaudeActivityProvider drives structured-output calls to Haiku.
+  WHENWEGO_ANTHROPIC_API_KEY?: string;
 }
 
 export type VoteState = 'yes' | 'maybe' | 'no';

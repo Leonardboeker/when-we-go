@@ -29,6 +29,7 @@ import {
   renderTPlus1Email,
   type FlightOption as EmailFlightOption,
   type HotelOption as EmailHotelOption,
+  type ActivitiesBucket,
 } from './email-templates';
 import { sendEmail } from './notify-pipeline';
 import { getForecast } from './weather';
@@ -36,6 +37,8 @@ import { loadFlightsForParticipant } from '../handlers/flights';
 import type { FlightCachePayload } from './flights';
 import { loadHotelsForPoll } from '../handlers/hotels';
 import type { HotelCachePayload } from './hotels';
+import { loadActivitiesForPoll } from '../handlers/activities';
+import type { ActivityCachePayload } from './activities';
 
 export interface ReminderFanOutInput {
   env: Env;
@@ -158,6 +161,34 @@ export async function fanOutReminders(
         )
       : null;
 
+  // Phase 7 — pre-fetch the cached activity list for T-7 (the only reminder
+  // that surfaces activities). Cache TTL 7d typically covers this; failures
+  // are non-fatal — template gracefully omits the activities section.
+  let sharedActivitiesForT7: ActivitiesBucket = {};
+  if (type === 'T-7') {
+    try {
+      const cache: ActivityCachePayload = await loadActivitiesForPoll({
+        env,
+        poll,
+      });
+      if (cache.reason === 'ok') {
+        const map = (it: ActivityCachePayload['activities']['thisWeek'][number]) => ({
+          name: it.name,
+          note: it.whyOneSentence,
+        });
+        sharedActivitiesForT7 = {
+          thisWeek: cache.activities.thisWeek.map(map),
+          alwaysGreat: cache.activities.alwaysGreat.map(map),
+        };
+      }
+    } catch (err) {
+      console.error(
+        `[reminders] activities load failed for ${poll.slug}/${type}`,
+        err
+      );
+    }
+  }
+
   // Phase 6 — pre-fetch hotel data once for the relevant reminder types.
   //   T-30: include the shortlist alongside the refreshed flights
   //   T-7:  include the shortlist alongside the weather forecast
@@ -253,6 +284,7 @@ export async function fanOutReminders(
         flightsRefreshed,
         sharedHotels,
         chosenHotelForT1,
+        sharedActivitiesForT7,
       });
 
       const sendRes = await sendEmail(env, {
@@ -321,6 +353,7 @@ function renderForType(args: {
   flightsRefreshed: EmailFlightOption[];
   sharedHotels: EmailHotelOption[];
   chosenHotelForT1: EmailHotelOption | null;
+  sharedActivitiesForT7: ActivitiesBucket;
 }) {
   const common = {
     poll: args.poll,
@@ -340,14 +373,26 @@ function renderForType(args: {
         flightsRefreshed: args.flightsRefreshed,
         hotels: args.sharedHotels,
       });
-    case 'T-7':
+    case 'T-7': {
       // Phase 6 — pass shared hotels into the activities/weather email so
       // participants get one last look before T-1's locked-in version.
+      // Phase 7 — also surface the cached Claude-curated activity list.
+      // Activities go in their own buckets; hotels are merged into thisWeek
+      // alongside so we don't lose the existing hotel surface.
+      const hotelItems = hotelsAsActivityList(args.sharedHotels);
+      const activities: ActivitiesBucket = {
+        thisWeek: [
+          ...hotelItems,
+          ...(args.sharedActivitiesForT7.thisWeek ?? []),
+        ],
+        alwaysGreat: args.sharedActivitiesForT7.alwaysGreat ?? [],
+      };
       return renderT7Email({
         ...common,
         weatherForecast: args.weatherForecast,
-        activities: { thisWeek: hotelsAsActivityList(args.sharedHotels) },
+        activities,
       });
+    }
     case 'T-1':
       return renderT1Email({
         ...common,
