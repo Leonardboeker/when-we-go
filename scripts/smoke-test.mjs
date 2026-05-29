@@ -812,6 +812,114 @@ if (!ORG_TOKEN) {
   });
 }
 
+// (10) Phase 6 — hotels (PROVIDER-ABSTRACTED; mock impl)
+console.log('\n(10) Hotels flow (provider-abstracted, mock impl):');
+const VALID_HOTEL_REASONS = new Set([
+  'ok',
+  'destination_unmapped',
+  'no_inventory',
+  'provider_error',
+]);
+if (PARTICIPANTS.length === 0) {
+  await check('GET /api/hotels', async () => ({ skip: 'no SMOKE_TOKENS' }));
+} else {
+  const me = PARTICIPANTS[0];
+
+  await check('GET /api/hotels -> 200 + { reason:"ok", provider.isReal:false, hotels.length>=5, all source:"mock" }', async () => {
+    const { status, json } = await fetchJson(
+      `${BASE}/api/hotels?slug=${encodeURIComponent(SLUG)}&token=${encodeURIComponent(me.token)}`
+    );
+    if (status !== 200) return `status ${status} body=${JSON.stringify(json)}`;
+    if (!json) return 'no JSON body';
+    if (!Array.isArray(json.hotels)) return `hotels not array: ${JSON.stringify(json.hotels)}`;
+    if (!VALID_HOTEL_REASONS.has(json.reason)) return `invalid reason "${json.reason}"`;
+    if (typeof json.fetchedAt !== 'number') return `fetchedAt not number: ${json.fetchedAt}`;
+    if (!json.provider || typeof json.provider.name !== 'string') return 'provider.{name} missing';
+    if (json.provider.isReal !== false) return `provider.isReal=${json.provider.isReal} expected false (mock)`;
+    if (json.reason === 'ok') {
+      if (json.hotels.length < 5) return `hotels.length=${json.hotels.length} want >=5`;
+      for (const h of json.hotels) {
+        if (h.source !== 'mock') return `hotel source=${h.source} expected 'mock'`;
+      }
+    }
+    console.log(`        [info] hotels reason=${json.reason} count=${json.hotels.length} provider=${json.provider.name}`);
+    return true;
+  });
+
+  await check('GET /api/hotels with wrong token -> 404', async () => {
+    const { status } = await fetchJson(
+      `${BASE}/api/hotels?slug=${encodeURIComponent(SLUG)}&token=NEVER_VALID_TOKEN_zzz`
+    );
+    if (status !== 404) return `status ${status} expected 404`;
+    return true;
+  });
+
+  await check('POST /api/hotel-vote -> 200, tally increments', async () => {
+    // First read current hotels to grab a hotelId.
+    const { json: list } = await fetchJson(
+      `${BASE}/api/hotels?slug=${encodeURIComponent(SLUG)}&token=${encodeURIComponent(me.token)}`
+    );
+    if (!list || !list.hotels || list.hotels.length === 0) return 'no hotels to vote on';
+    const hotelId = list.hotels[0].hotelId;
+    const before = (list.voteTallies && list.voteTallies[hotelId]) || 0;
+    const { status, json } = await fetchJson(`${BASE}/api/hotel-vote`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slug: SLUG, token: me.token, hotelId }),
+    });
+    if (status !== 200) return `status ${status} body=${JSON.stringify(json)}`;
+    if (!json || json.ok !== true) return 'ok flag missing';
+    if (!json.voteTallies || typeof json.voteTallies[hotelId] !== 'number') {
+      return `voteTallies missing for ${hotelId}`;
+    }
+    // Idempotent re-vote should not double-count; but a fresh participant
+    // voting for the first time should ≥ before+0 (state may persist across
+    // smoke runs because the DO sticks around).
+    if (json.voteTallies[hotelId] < before) {
+      return `tally went down: before=${before} after=${json.voteTallies[hotelId]}`;
+    }
+    return true;
+  });
+
+  if (!ORG_TOKEN) {
+    await check('POST /api/admin/hotel-choose', async () => ({ skip: 'no SMOKE_ORGANIZER_TOKEN' }));
+  } else {
+    await check('POST /api/admin/hotel-choose with org -> 200 + chosenHotelId set', async () => {
+      const { json: list } = await fetchJson(
+        `${BASE}/api/hotels?slug=${encodeURIComponent(SLUG)}&token=${encodeURIComponent(me.token)}`
+      );
+      if (!list || !list.hotels || list.hotels.length === 0) return 'no hotels';
+      const hotelId = list.hotels[0].hotelId;
+      const { status, json } = await fetchJson(`${BASE}/api/admin/hotel-choose`, {
+        method: 'POST',
+        headers: { 'X-Organizer-Token': ORG_TOKEN, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug: SLUG, hotelId }),
+      });
+      if (status !== 200) return `status ${status} body=${JSON.stringify(json)}`;
+      if (!json || json.ok !== true) return 'ok flag missing';
+      if (json.chosenHotelId !== hotelId) return `chosenHotelId=${json.chosenHotelId} expected ${hotelId}`;
+      // Read-back: GET /api/hotels should now expose chosenHotelId
+      const { json: after } = await fetchJson(
+        `${BASE}/api/hotels?slug=${encodeURIComponent(SLUG)}&token=${encodeURIComponent(me.token)}`
+      );
+      if (after.chosenHotelId !== hotelId) {
+        return `read-back chosenHotelId=${after.chosenHotelId} expected ${hotelId}`;
+      }
+      return true;
+    });
+
+    await check('POST /api/admin/hotel-choose with WRONG org -> 404', async () => {
+      const { status } = await fetchJson(`${BASE}/api/admin/hotel-choose`, {
+        method: 'POST',
+        headers: { 'X-Organizer-Token': 'wrong-org-token-NEVER-valid', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug: SLUG, hotelId: 'anything' }),
+      });
+      if (status !== 404) return `status ${status} expected 404`;
+      return true;
+    });
+  }
+}
+
 const elapsed = ((Date.now() - started) / 1000).toFixed(2);
 console.log('\n' + '-'.repeat(60));
 console.log(`[smoke] ${pass} passed, ${fail} failed, ${skipped} skipped (${elapsed}s)`);

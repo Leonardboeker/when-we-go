@@ -18,12 +18,19 @@ import type { Poll } from './polls-config';
 import type { Overlap, OverlapRange } from './overlap';
 import { addDaysIso, buildICalForPoll } from './ical';
 import { buildAllCalendarLinks } from './calendar-links';
-import { renderCloseSummaryEmail, type FlightOption as EmailFlightOption } from './email-templates';
+import {
+  renderCloseSummaryEmail,
+  type FlightOption as EmailFlightOption,
+  type HotelOption as EmailHotelOption,
+} from './email-templates';
 import { sendEmail } from './notify-pipeline';
 import { computeTripStart } from './trip-date';
 import type { WhenWeGoPollDO } from '../durable-object';
 import type { FlightCachePayload } from './flights';
 import { getFlightProvider } from './flight-provider';
+import { getHotelProvider } from './hotel-provider';
+import type { HotelCachePayload } from './hotels';
+import { hotelCacheKey } from './hotels';
 
 export interface FanOutInput {
   env: Env;
@@ -92,6 +99,49 @@ function buildGoogleFlightsUrl(args: {
   return `https://www.google.com/travel/flights?q=${encodeURIComponent(q)}`;
 }
 
+/**
+ * Phase 6 — convert our shared hotel cache into the email's HotelOption
+ * shape. Email expects { name, pricePerNightEur, url, area }; our cache
+ * carries the full HotelOption. Returns top 5 by per-person price.
+ *
+ * `url` is built as a Booking.com search prefilled with the hotel name +
+ * destination city — closest thing to a deep link without a real provider.
+ */
+function hotelsCacheToEmailShape(
+  cache: HotelCachePayload | null
+): EmailHotelOption[] {
+  if (!cache || cache.reason !== 'ok' || cache.hotels.length === 0) return [];
+  const city = cache.destination.city;
+  const checkIn = cache.dateRange.checkIn;
+  const checkOut = cache.dateRange.checkOut;
+  return cache.hotels.slice(0, 5).map((h) => ({
+    name: h.name,
+    pricePerNightEur: h.nightlyPriceEur,
+    url: buildBookingSearchUrl({
+      name: h.name,
+      city,
+      checkIn,
+      checkOut,
+    }),
+    // Use stars + distance as "area" line for compactness (template is single-line).
+    area: `${h.stars}★ · ${h.distanceToCenterKm.toFixed(1)} km to centre`,
+  }));
+}
+
+function buildBookingSearchUrl(args: {
+  name: string;
+  city: string;
+  checkIn: string;
+  checkOut: string;
+}): string {
+  // Booking.com searchresults pattern — uses `ss` for free-text search.
+  const ss = `${args.name} ${args.city}`.trim();
+  const params = new URLSearchParams({ ss });
+  if (args.checkIn) params.set('checkin', args.checkIn);
+  if (args.checkOut) params.set('checkout', args.checkOut);
+  return `https://www.booking.com/searchresults.html?${params.toString()}`;
+}
+
 export async function fanOutCloseSummaryEmails(
   args: FanOutInput
 ): Promise<FanOutResult> {
@@ -125,6 +175,27 @@ export async function fanOutCloseSummaryEmails(
       }
     })
   );
+
+  // Phase 6 — pre-fetch the shared hotel cache once (same list for everyone in
+  // this poll). Cache key matches the one used by the /api/hotels handler so we
+  // hit warm data populated by the cron pre-fetch.
+  const hotelProvider = getHotelProvider(env);
+  const guests = poll.participants.length;
+  const hotelDatePair = { checkIn: datePair.start, checkOut: datePair.end };
+  let hotelCache: HotelCachePayload | null = null;
+  try {
+    const hotelKey = hotelCacheKey(
+      poll.slug,
+      hotelDatePair,
+      guests,
+      hotelProvider.name
+    );
+    const raw = await stubForCache.getCached(hotelKey);
+    if (raw) hotelCache = JSON.parse(raw) as HotelCachePayload;
+  } catch {
+    hotelCache = null;
+  }
+  const sharedHotels = hotelsCacheToEmailShape(hotelCache);
 
   // Phase 9: belt-and-braces — also persist trip_start here. Cron + admin-close
   // already do this, but admin-resend-close-summary calls into us without
@@ -212,7 +283,7 @@ export async function fanOutCloseSummaryEmails(
       flights: flightsCacheToEmailShape(
         flightCacheByToken.get(participant.token) ?? null
       ),
-      hotels: [],
+      hotels: sharedHotels,
       activities: {},
       participantPageUrl,
       icalUrl,

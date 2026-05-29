@@ -49,16 +49,24 @@ export function computeDefaultsForPoll(
   const participantCount = Math.max(1, poll.participants.length);
 
   // Hotel share — total / N, rounded UP (so we don't under-collect by 1-2 EUR).
+  // Phase 6 writes BOTH:
+  //   - chosen_hotel              JSON blob { totalPriceEur, ... }
+  //   - chosen_hotel_total_eur    flat integer string (fast path)
+  // We accept either: try JSON first (rich), fall through to a bare integer.
   let hotelShareEur = 0;
   if (chosenHotelRaw) {
+    let total = 0;
     try {
       const meta = JSON.parse(chosenHotelRaw) as ChosenHotelMeta;
-      const total = Number(meta?.totalPriceEur);
-      if (Number.isFinite(total) && total > 0) {
-        hotelShareEur = Math.ceil(total / participantCount);
-      }
+      const parsed = Number(meta?.totalPriceEur);
+      if (Number.isFinite(parsed) && parsed > 0) total = parsed;
     } catch {
-      hotelShareEur = 0;
+      // Not JSON — try a bare integer string (legacy or chosen_hotel_total_eur).
+      const flat = Number(chosenHotelRaw);
+      if (Number.isFinite(flat) && flat > 0) total = flat;
+    }
+    if (total > 0) {
+      hotelShareEur = Math.ceil(total / participantCount);
     }
   }
 

@@ -4,6 +4,7 @@
 import type { GetStaticPaths } from 'astro';
 import BaseLayout from '../../../layouts/BaseLayout.astro';
 import CostSplitPanel from '../../../components/CostSplitPanel.astro';
+import HotelShortlist from '../../../components/HotelShortlist.astro';
 import { polls, type Poll } from '../../../data/polls';
 import { daysUntil } from '../../../lib/calendar';
 
@@ -160,6 +161,10 @@ const publicApiBase =
         <tbody data-admin-flights-tbody></tbody>
       </table>
     </section>
+
+    {/* Phase 6: hotel shortlist + organiser controls. Hidden until
+        /api/hotels resolves post-close. */}
+    <HotelShortlist mode="admin" />
 
     <CostSplitPanel
       slug={poll.slug}
@@ -319,6 +324,8 @@ const publicApiBase =
           render(data);
           // Phase 5: pull flight summaries once we know the poll is closed.
           if (data.closed) fetchAdminFlights();
+          // Phase 6: hotel shortlist (admin view).
+          if (data.closed) loadAdminHotels();
         } catch (err) {
           if (footEl) footEl.textContent = 'Refresh failed: ' + (err && err.message);
         }
@@ -367,6 +374,242 @@ const publicApiBase =
         } catch (_err) {
           // Graceful failure — admin section stays hidden.
         }
+      }
+
+      // ─── Phase 6: hotel shortlist (admin view) ──────────────────────────
+      const hotelSection = document.getElementById('hotel-shortlist');
+      const hotelRefreshBtn = hotelSection
+        ? hotelSection.querySelector('[data-hotels-refresh]')
+        : null;
+      const hotelListEl = hotelSection
+        ? hotelSection.querySelector('[data-hotels-list]')
+        : null;
+      const hotelStateEl = hotelSection
+        ? hotelSection.querySelector('[data-hotels-state]')
+        : null;
+      const hotelStateText = hotelSection
+        ? hotelSection.querySelector('[data-hotels-state-text]')
+        : null;
+      const hotelDemoBanner = hotelSection
+        ? hotelSection.querySelector('[data-hotels-demo-banner]')
+        : null;
+      const hotelMetaEl = hotelSection
+        ? hotelSection.querySelector('[data-hotels-meta]')
+        : null;
+
+      function hotelReasonMsg(reason) {
+        switch (reason) {
+          case 'destination_unmapped':
+            return "Destination couldn't be mapped to an IATA code.";
+          case 'no_inventory':
+            return 'No hotels in shortlist for these dates yet.';
+          case 'provider_error':
+            return 'Provider error — try refreshing.';
+          default:
+            return '';
+        }
+      }
+
+      function renderAdminHotelCard(h, opts) {
+        const li = document.createElement('li');
+        li.className = 'hotel-card' + (opts.chosen ? ' is-chosen' : '');
+        li.dataset.hotelId = h.hotelId;
+
+        const main = document.createElement('div');
+        const nameEl = document.createElement('p');
+        nameEl.className = 'hotel-card-name';
+        nameEl.textContent = h.name;
+        main.appendChild(nameEl);
+        const metaEl = document.createElement('p');
+        metaEl.className = 'hotel-card-meta';
+        metaEl.textContent =
+          '★'.repeat(Math.max(1, Math.min(5, h.stars))) +
+          ' · ' +
+          (h.distanceToCenterKm != null
+            ? h.distanceToCenterKm.toFixed(1) + ' km to centre'
+            : '');
+        main.appendChild(metaEl);
+        if (h.amenities && h.amenities.length > 0) {
+          const am = document.createElement('p');
+          am.className = 'hotel-card-amenities';
+          am.textContent = h.amenities.slice(0, 4).join(' · ');
+          main.appendChild(am);
+        }
+        li.appendChild(main);
+
+        const prices = document.createElement('div');
+        prices.className = 'hotel-card-prices';
+        const pp = document.createElement('p');
+        pp.className = 'hotel-card-pp';
+        pp.textContent = '€' + h.perPersonEur;
+        prices.appendChild(pp);
+        const ppLabel = document.createElement('span');
+        ppLabel.className = 'hotel-card-pp-label';
+        ppLabel.textContent = 'per person';
+        prices.appendChild(ppLabel);
+        const total = document.createElement('p');
+        total.className = 'hotel-card-total';
+        total.textContent =
+          '€' + h.totalPriceEur + ' total · €' + h.nightlyPriceEur + '/night';
+        prices.appendChild(total);
+        li.appendChild(prices);
+
+        const actions = document.createElement('div');
+        actions.className = 'hotel-card-actions';
+        const chooseBtn = document.createElement('button');
+        chooseBtn.type = 'button';
+        chooseBtn.className = 'hotel-card-button';
+        if (opts.chosen) {
+          chooseBtn.classList.add('hotel-card-button-primary');
+          chooseBtn.textContent = '✓ Chosen';
+          chooseBtn.disabled = true;
+        } else {
+          chooseBtn.textContent = 'Mark as chosen';
+          chooseBtn.addEventListener('click', () =>
+            chooseHotel(h.hotelId)
+          );
+        }
+        actions.appendChild(chooseBtn);
+
+        const tally = document.createElement('span');
+        tally.className = 'hotel-card-vote-tally';
+        const count = (opts.voteTallies && opts.voteTallies[h.hotelId]) || 0;
+        tally.textContent = count + ' vote' + (count === 1 ? '' : 's');
+        actions.appendChild(tally);
+        li.appendChild(actions);
+
+        return li;
+      }
+
+      function renderAdminHotels(data) {
+        if (!hotelSection) return;
+        hotelSection.hidden = false;
+        const hotels = (data && data.hotels) || [];
+        const reason = data && data.reason;
+        const provider = data && data.provider;
+        const dateRange = data && data.dateRange;
+        const destination = data && data.destination;
+        const chosenHotelId = data && data.chosenHotelId;
+        const voteTallies = (data && data.voteTallies) || {};
+
+        if (hotelDemoBanner) {
+          hotelDemoBanner.hidden = !(provider && provider.isReal === false);
+        }
+        if (hotelMetaEl && destination && destination.city) {
+          const datesLabel =
+            dateRange && dateRange.checkIn
+              ? ' · ' + dateRange.checkIn + ' → ' + dateRange.checkOut
+              : '';
+          const guestsLabel =
+            data && typeof data.guests === 'number'
+              ? ' · ' + data.guests + ' guest' + (data.guests === 1 ? '' : 's')
+              : '';
+          hotelMetaEl.textContent = destination.city + datesLabel + guestsLabel;
+          hotelMetaEl.hidden = false;
+        }
+        if (hotelListEl) {
+          hotelListEl.innerHTML = '';
+          hotelListEl.hidden = true;
+        }
+        if (hotelStateEl) hotelStateEl.hidden = true;
+
+        if (reason !== 'ok' || hotels.length === 0) {
+          if (hotelStateEl && hotelStateText) {
+            hotelStateText.textContent =
+              hotelReasonMsg(reason || 'no_inventory') ||
+              'Hotel shortlist is empty.';
+            hotelStateEl.hidden = false;
+          }
+          return;
+        }
+
+        const top = hotels.slice(0, 5);
+        if (hotelListEl) {
+          for (const h of top) {
+            hotelListEl.appendChild(
+              renderAdminHotelCard(h, {
+                chosen: chosenHotelId === h.hotelId,
+                voteTallies,
+              })
+            );
+          }
+          hotelListEl.hidden = false;
+        }
+      }
+
+      async function loadAdminHotels() {
+        if (!hotelSection) return;
+        try {
+          // Admin reuses the participant endpoint — pass the organiser token
+          // as the "viewer" token (organiser is also a participant of the poll
+          // for read purposes; if not, fall back to the first participant).
+          // Picking the first participant lets us avoid encoding the org token
+          // into a participant-shaped endpoint.
+          const firstParticipantRow = document.querySelector(
+            '[data-admin-voters] tr[data-token]'
+          );
+          const viewerToken = firstParticipantRow
+            ? firstParticipantRow.dataset.token
+            : null;
+          if (!viewerToken) return;
+          const url =
+            apiBase +
+            '/api/hotels?slug=' +
+            encodeURIComponent(slug) +
+            '&token=' +
+            encodeURIComponent(viewerToken);
+          const res = await fetch(url, { headers: { Accept: 'application/json' } });
+          if (!res.ok) return;
+          const data = await res.json();
+          renderAdminHotels(data);
+        } catch (_err) {
+          /* graceful */
+        }
+      }
+
+      async function chooseHotel(hotelId) {
+        try {
+          const res = await fetch(apiBase + '/api/admin/hotel-choose', {
+            method: 'POST',
+            headers: {
+              'X-Organizer-Token': organizerToken,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ slug, hotelId }),
+          });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          await loadAdminHotels();
+        } catch (err) {
+          alert('Could not mark chosen: ' + (err && err.message));
+        }
+      }
+
+      if (hotelRefreshBtn) {
+        hotelRefreshBtn.addEventListener('click', async () => {
+          hotelRefreshBtn.disabled = true;
+          hotelRefreshBtn.textContent = 'Refreshing…';
+          try {
+            const res = await fetch(
+              apiBase + '/api/hotels/refresh?slug=' + encodeURIComponent(slug),
+              {
+                method: 'POST',
+                headers: { 'X-Organizer-Token': organizerToken },
+              }
+            );
+            if (res.status === 429) {
+              alert('Refresh available again in ~4 hours.');
+            } else if (!res.ok) {
+              alert('Refresh failed (HTTP ' + res.status + ')');
+            } else {
+              await loadAdminHotels();
+            }
+          } catch (err) {
+            alert('Refresh failed: ' + (err && err.message));
+          } finally {
+            hotelRefreshBtn.textContent = 'Refresh hotels';
+            hotelRefreshBtn.disabled = false;
+          }
+        });
       }
 
       function startPolling() {

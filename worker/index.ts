@@ -43,6 +43,10 @@ import { handleAdminExportPaymeback } from './handlers/admin-export-paymeback';
 import { handleFlights } from './handlers/flights';
 import { handleFlightsRefresh } from './handlers/flights-refresh';
 import { handleAdminFlights } from './handlers/admin-flights';
+import { handleHotels } from './handlers/hotels';
+import { handleHotelsRefresh } from './handlers/hotels-refresh';
+import { handleHotelVote } from './handlers/hotel-vote';
+import { handleAdminHotelChoose } from './handlers/admin-hotel-choose';
 import { handleScheduled } from './scheduled';
 
 export { WhenWeGoPollDO };
@@ -51,8 +55,8 @@ const router = new Router();
 
 router.get('/api/health', (req, _env, _ctx) => {
   const env = _env as Env;
-  // Phase number reflects total shipped phases (Phase 5 lands AFTER 10).
-  return jsonResponse({ ok: true, phase: 11 }, { status: 200 }, req, env);
+  // Phase number reflects total shipped phases (Phase 5/6 land AFTER 10).
+  return jsonResponse({ ok: true, phase: 12 }, { status: 200 }, req, env);
 });
 
 router.get('/api/poll', (req, env, ctx) =>
@@ -105,6 +109,20 @@ router.post('/api/flights/refresh', (req, env, ctx) =>
 );
 router.get('/api/admin/flights', (req, env, ctx) =>
   handleAdminFlights(req, env as Env, ctx)
+);
+// Phase 6 — hotels (PROVIDER-ABSTRACTED). Same shape as flights but the
+// shortlist is SHARED across the poll (one cache key per slug/date/guests).
+router.get('/api/hotels', (req, env, ctx) =>
+  handleHotels(req, env as Env, ctx)
+);
+router.post('/api/hotels/refresh', (req, env, ctx) =>
+  handleHotelsRefresh(req, env as Env, ctx)
+);
+router.post('/api/hotel-vote', (req, env, ctx) =>
+  handleHotelVote(req, env as Env, ctx)
+);
+router.post('/api/admin/hotel-choose', (req, env, ctx) =>
+  handleAdminHotelChoose(req, env as Env, ctx)
 );
 
 export default {

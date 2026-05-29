@@ -28,11 +28,14 @@ import {
   renderT1Email,
   renderTPlus1Email,
   type FlightOption as EmailFlightOption,
+  type HotelOption as EmailHotelOption,
 } from './email-templates';
 import { sendEmail } from './notify-pipeline';
 import { getForecast } from './weather';
 import { loadFlightsForParticipant } from '../handlers/flights';
 import type { FlightCachePayload } from './flights';
+import { loadHotelsForPoll } from '../handlers/hotels';
+import type { HotelCachePayload } from './hotels';
 
 export interface ReminderFanOutInput {
   env: Env;
@@ -73,6 +76,32 @@ function flightsCacheToEmailShape(
       `Flights from ${from} to ${to} on ${cache.dateRange.start} returning ${cache.dateRange.end}`
     )}`,
   }));
+}
+
+/**
+ * Phase 6 — convert the shared hotel cache into the email's HotelOption shape.
+ * Returns top 5 by per-person price. Identical helper to the one in
+ * close-email-fanout.ts; kept inline to keep both modules self-contained.
+ */
+function hotelsCacheToEmailShape(
+  cache: HotelCachePayload | null
+): EmailHotelOption[] {
+  if (!cache || cache.reason !== 'ok' || cache.hotels.length === 0) return [];
+  const city = cache.destination.city;
+  const checkIn = cache.dateRange.checkIn;
+  const checkOut = cache.dateRange.checkOut;
+  return cache.hotels.slice(0, 5).map((h) => {
+    const ss = `${h.name} ${city}`.trim();
+    const params = new URLSearchParams({ ss });
+    if (checkIn) params.set('checkin', checkIn);
+    if (checkOut) params.set('checkout', checkOut);
+    return {
+      name: h.name,
+      pricePerNightEur: h.nightlyPriceEur,
+      url: `https://www.booking.com/searchresults.html?${params.toString()}`,
+      area: `${h.stars}★ · ${h.distanceToCenterKm.toFixed(1)} km to centre`,
+    };
+  });
 }
 
 export async function fanOutReminders(
@@ -128,6 +157,42 @@ export async function fanOutReminders(
           7
         )
       : null;
+
+  // Phase 6 — pre-fetch hotel data once for the relevant reminder types.
+  //   T-30: include the shortlist alongside the refreshed flights
+  //   T-7:  include the shortlist alongside the weather forecast
+  //   T-1:  include the organiser-chosen hotel (if any)
+  let sharedHotels: EmailHotelOption[] = [];
+  let chosenHotelForT1: EmailHotelOption | null = null;
+  if (type === 'T-30' || type === 'T-7') {
+    try {
+      const hotelCache = await loadHotelsForPoll({ env, poll });
+      sharedHotels = hotelsCacheToEmailShape(hotelCache);
+    } catch (err) {
+      console.error(`[reminders] hotel load failed for ${poll.slug}/${type}`, err);
+    }
+  }
+  if (type === 'T-1') {
+    const chosenRaw = await stub.getMeta('chosen_hotel');
+    if (chosenRaw) {
+      try {
+        const parsed = JSON.parse(chosenRaw as string) as {
+          name?: string;
+          stars?: number;
+          nightlyPriceEur?: number;
+        };
+        if (parsed.name) {
+          chosenHotelForT1 = {
+            name: parsed.name,
+            pricePerNightEur: parsed.nightlyPriceEur,
+            area: typeof parsed.stars === 'number' ? `${parsed.stars}★` : undefined,
+          };
+        }
+      } catch {
+        /* graceful fallback — T-1 renders without hotel block */
+      }
+    }
+  }
 
   for (const participant of poll.participants) {
     try {
@@ -186,6 +251,8 @@ export async function fanOutReminders(
         participantPageUrl,
         weatherForecast,
         flightsRefreshed,
+        sharedHotels,
+        chosenHotelForT1,
       });
 
       const sendRes = await sendEmail(env, {
@@ -252,6 +319,8 @@ function renderForType(args: {
   participantPageUrl: string;
   weatherForecast: Awaited<ReturnType<typeof getForecast>>;
   flightsRefreshed: EmailFlightOption[];
+  sharedHotels: EmailHotelOption[];
+  chosenHotelForT1: EmailHotelOption | null;
 }) {
   const common = {
     poll: args.poll,
@@ -265,22 +334,24 @@ function renderForType(args: {
     case 'T-30':
       // Phase 5 — T-30 force-refreshes flights upstream; pass the refreshed
       // list straight through. Empty array → template renders graceful
-      // "prices update soon" line.
+      // "prices update soon" line. Phase 6 adds the hotel shortlist alongside.
       return renderT30Email({
         ...common,
         flightsRefreshed: args.flightsRefreshed,
-        hotels: [],
+        hotels: args.sharedHotels,
       });
     case 'T-7':
+      // Phase 6 — pass shared hotels into the activities/weather email so
+      // participants get one last look before T-1's locked-in version.
       return renderT7Email({
         ...common,
         weatherForecast: args.weatherForecast,
-        activities: {},
+        activities: { thisWeek: hotelsAsActivityList(args.sharedHotels) },
       });
     case 'T-1':
       return renderT1Email({
         ...common,
-        chosenHotel: null,
+        chosenHotel: args.chosenHotelForT1,
       });
     case 'T+1':
       return renderTPlus1Email(common);
@@ -291,4 +362,17 @@ function renderForType(args: {
       throw new Error(`Unknown reminder type: ${_exhaustive as string}`);
     }
   }
+}
+
+/**
+ * Phase 6 — T-7 template doesn't have a dedicated hotels slot, so we lift the
+ * shortlist into the activities.thisWeek bucket with a "Hotel: " prefix. Keeps
+ * the change to email-templates.ts zero while still surfacing the info.
+ */
+function hotelsAsActivityList(hotels: EmailHotelOption[]) {
+  return hotels.slice(0, 3).map((h) => ({
+    name: `Hotel pick: ${h.name}${h.pricePerNightEur ? ` · €${h.pricePerNightEur}/night` : ''}`,
+    url: h.url,
+    note: h.area,
+  }));
 }

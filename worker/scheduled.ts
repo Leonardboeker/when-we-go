@@ -22,6 +22,7 @@ import { computeTripStart } from './lib/trip-date';
 import { isInReminderWindow } from './lib/reminder-window';
 import { fanOutReminders } from './lib/reminder-fanout';
 import { loadFlightsForParticipant } from './handlers/flights';
+import { loadHotelsForPoll } from './handlers/hotels';
 
 const ALL_REMINDER_TYPES: ReminderType[] = ['T-30', 'T-7', 'T-1', 'T+1'];
 
@@ -91,6 +92,18 @@ export async function handleScheduled(
           await fetchFlightsForCloseFanout(env, poll);
         } catch (err) {
           console.error(`[cron] flights pre-fetch failed for ${poll.slug}`, err);
+        }
+
+        // Phase 6: pre-fetch the shared hotel shortlist into the cache so
+        // the close-summary email + post-close UI both hit warm data. One
+        // call per poll (shared list — not per-participant).
+        try {
+          const hotels = await loadHotelsForPoll({ env, poll });
+          console.log(
+            `[cron] hotels pre-fetch for ${poll.slug}: reason=${hotels.reason} count=${hotels.hotels.length}`
+          );
+        } catch (err) {
+          console.error(`[cron] hotels pre-fetch failed for ${poll.slug}`, err);
         }
 
         // Phase 8: per-participant close-summary emails (fire-and-forget).

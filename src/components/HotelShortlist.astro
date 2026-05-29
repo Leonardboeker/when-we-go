@@ -1,0 +1,243 @@
+---
+// src/components/HotelShortlist.astro
+// Phase 6 — post-close hotel shortlist widget. Renders hidden on SSR; the
+// parent page IIFE populates it after /api/hotels resolves.
+//
+// Wire-up:
+//   Participant page ([token].astro):
+//     - On poll close + reason='ok': render shared shortlist
+//     - "Vote for this one" button → POST /api/hotel-vote { slug, token, hotelId }
+//     - "✓ Chosen by organiser" badge when chosenHotelId matches
+//     - Yellow DEMO banner when provider.isReal === false
+//
+//   Admin page (admin/[token].astro):
+//     - Same shortlist + "Mark as chosen" buttons → POST /api/admin/hotel-choose
+//     - Vote tally pill on each card
+//     - "Refresh hotels" button → POST /api/hotels/refresh (org-only, 1/4h)
+//
+// `mode` prop ('participant' | 'admin') gates which controls render — the
+// markup is shared so both views always look like the same product.
+interface Props {
+  mode: 'participant' | 'admin';
+}
+const { mode } = Astro.props as Props;
+---
+
+<section
+  id="hotel-shortlist"
+  class="hotel-shortlist"
+  data-hotel-mode={mode}
+  hidden
+  aria-labelledby="hotel-shortlist-title"
+>
+  <div class="hotel-shortlist-header">
+    <h2 id="hotel-shortlist-title" class="hotel-shortlist-title">
+      Hotels for the group
+    </h2>
+    {
+      mode === 'admin' && (
+        <button
+          type="button"
+          class="hotel-shortlist-refresh"
+          data-hotels-refresh
+        >
+          Refresh hotels
+        </button>
+      )
+    }
+  </div>
+
+  <div class="hotel-shortlist-demo-banner" data-hotels-demo-banner hidden>
+    <strong>📍 DEMO hotel data</strong> — real provider not configured yet.
+    Prices are illustrative; use Booking.com / Hostelworld for actual booking.
+  </div>
+
+  <p class="hotel-shortlist-meta" data-hotels-meta hidden></p>
+
+  <div class="hotel-shortlist-state" data-hotels-state hidden>
+    <p data-hotels-state-text></p>
+  </div>
+
+  <ul class="hotel-shortlist-list" data-hotels-list hidden></ul>
+
+  <p class="hotel-shortlist-disclaimer">
+    Shared shortlist — everyone in the group sees the same hotels. Per-person
+    price = total ÷ {`{`}group size{`}`} (we round up so no-one's short by €1).
+  </p>
+</section>
+
+<style>
+  .hotel-shortlist {
+    margin: 24px 0;
+    padding: 16px;
+    background: var(--color-surface, #fff);
+    border: 3px solid var(--color-on-background, #1c1b1f);
+    box-shadow: 4px 4px 0 var(--color-primary, #6750a4);
+  }
+  .hotel-shortlist-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .hotel-shortlist-title {
+    margin: 0;
+    font-family: var(--font-label, 'JetBrains Mono', monospace);
+    font-size: 14px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .hotel-shortlist-refresh {
+    appearance: none;
+    border: 2px solid var(--color-on-background, #1c1b1f);
+    background: var(--color-primary-container, #eaddff);
+    color: var(--color-on-primary-container, #21005d);
+    padding: 6px 12px;
+    font-family: var(--font-label, 'JetBrains Mono', monospace);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+  }
+  .hotel-shortlist-refresh:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  .hotel-shortlist-meta {
+    margin: 0 0 12px 0;
+    font-size: 12px;
+    color: var(--color-on-surface-variant, #49454f);
+  }
+  .hotel-shortlist-demo-banner {
+    margin: 0 0 12px 0;
+    padding: 10px 12px;
+    font-size: 13px;
+    line-height: 1.4;
+    background: repeating-linear-gradient(
+      45deg,
+      #fff7d6,
+      #fff7d6 8px,
+      #ffeaa0 8px,
+      #ffeaa0 16px
+    );
+    border: 2px solid #1c1b1f;
+    color: #1c1b1f;
+  }
+  .hotel-shortlist-state {
+    margin: 0;
+    padding: 12px;
+    background: var(--color-surface-variant, #f3edf7);
+    border: 2px dashed var(--color-on-background, #1c1b1f);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .hotel-shortlist-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 10px;
+  }
+  .hotel-card {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 12px;
+    padding: 12px;
+    border: 2px solid var(--color-on-background, #1c1b1f);
+    background: #fff;
+    align-items: start;
+  }
+  .hotel-card.is-chosen {
+    background: var(--color-primary-container, #eaddff);
+    border-width: 3px;
+  }
+  .hotel-card-name {
+    font-size: 15px;
+    font-weight: 800;
+    margin: 0 0 4px 0;
+  }
+  .hotel-card-meta {
+    font-size: 12px;
+    color: var(--color-on-surface-variant, #49454f);
+    margin: 0;
+  }
+  .hotel-card-amenities {
+    margin-top: 4px;
+    font-size: 11px;
+    color: var(--color-on-surface-variant, #49454f);
+  }
+  .hotel-card-prices {
+    text-align: right;
+    font-family: var(--font-label, 'JetBrains Mono', monospace);
+  }
+  .hotel-card-pp {
+    font-size: 20px;
+    font-weight: 900;
+    margin: 0;
+  }
+  .hotel-card-pp-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-on-surface-variant, #49454f);
+  }
+  .hotel-card-total {
+    font-size: 11px;
+    color: var(--color-on-surface-variant, #49454f);
+    margin-top: 4px;
+  }
+  .hotel-card-actions {
+    grid-column: 1 / -1;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-top: 8px;
+  }
+  .hotel-card-button {
+    appearance: none;
+    border: 2px solid var(--color-on-background, #1c1b1f);
+    background: var(--color-surface, #fff);
+    color: var(--color-on-background, #1c1b1f);
+    padding: 4px 10px;
+    font-family: var(--font-label, 'JetBrains Mono', monospace);
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+  }
+  .hotel-card-button:disabled { opacity: 0.55; cursor: not-allowed; }
+  .hotel-card-button-primary {
+    background: var(--color-primary, #6750a4);
+    color: var(--color-on-primary, #fff);
+  }
+  .hotel-card-vote-tally {
+    font-family: var(--font-label, 'JetBrains Mono', monospace);
+    font-size: 10px;
+    color: var(--color-on-surface-variant, #49454f);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .hotel-card-chosen-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    background: var(--color-primary, #6750a4);
+    color: var(--color-on-primary, #fff);
+    font-family: var(--font-label, 'JetBrains Mono', monospace);
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .hotel-shortlist-disclaimer {
+    margin: 12px 0 0 0;
+    font-size: 11px;
+    color: var(--color-on-surface-variant, #49454f);
+    font-style: italic;
+  }
+</style>
