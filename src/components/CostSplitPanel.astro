@@ -1,0 +1,543 @@
+---
+// src/components/CostSplitPanel.astro
+// Phase 10 — admin "Split costs" section. Renders post-close only.
+//
+// Behavior:
+//   - On mount: GET /api/admin/cost-split → render table rows with
+//     hotelShare / flight / other / total + notes; each input is editable.
+//   - Edit any input → 300ms-debounced bulk POST to persist all rows
+//     (simpler than per-row PATCH; payload tiny).
+//   - "Export to pay-me-back JSON" → GET /api/admin/export-paymeback,
+//     open modal with pretty-printed `debtors` array + copy-to-clipboard
+//     + link to the pay-me-back quick-start.
+//
+// Auth: same X-Organizer-Token the parent admin page already holds.
+//
+// Props:
+//   slug, organizerToken, apiBase — passed by [token].astro via define:vars.
+
+interface Props {
+  slug: string;
+  organizerToken: string;
+  apiBase: string;
+}
+const { slug, organizerToken, apiBase } = Astro.props;
+---
+
+<section class="cost-section" aria-label="Split costs" data-cost-panel hidden>
+  <div class="cost-section-head">
+    <h2>Split costs</h2>
+    <span class="cost-section-hint" data-cost-hint>Loading…</span>
+  </div>
+  <p class="cost-blurb">
+    Pre-fills based on the chosen hotel + each person's cheapest flight (once those phases ship).
+    Edit any amount inline, then export to pay-me-back JSON.
+  </p>
+
+  <div class="cost-card" data-cost-card hidden>
+    <div class="cost-hotel-line" data-cost-hotel-line hidden>
+      <strong>Chosen hotel:</strong>
+      <span data-cost-hotel-name>—</span>
+      <span data-cost-hotel-total></span>
+    </div>
+
+    <table class="cost-table">
+      <thead>
+        <tr>
+          <th scope="col">Participant</th>
+          <th scope="col" class="cost-num">Hotel</th>
+          <th scope="col" class="cost-num">Flight</th>
+          <th scope="col" class="cost-num">Other</th>
+          <th scope="col" class="cost-num">Total</th>
+          <th scope="col">Notes</th>
+        </tr>
+      </thead>
+      <tbody data-cost-rows></tbody>
+    </table>
+
+    <div class="cost-actions">
+      <span class="cost-save-state" data-cost-save>Saved.</span>
+      <button type="button" class="admin-button" data-cost-export>
+        Export to pay-me-back JSON
+      </button>
+    </div>
+  </div>
+
+  <p class="cost-empty" data-cost-empty hidden>
+    Cost split is available only after the poll is closed.
+  </p>
+</section>
+
+<!-- Export modal — hidden until the button is clicked. -->
+<div
+  class="cost-modal-backdrop"
+  data-cost-modal
+  hidden
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="cost-modal-title"
+>
+  <div class="cost-modal">
+    <div class="cost-modal-head">
+      <h3 id="cost-modal-title">pay-me-back debtors.json</h3>
+      <button
+        type="button"
+        class="cost-modal-close"
+        data-cost-modal-close
+        aria-label="Close"
+      >×</button>
+    </div>
+    <p class="cost-modal-blurb" data-cost-modal-blurb>
+      Paste this into your pay-me-back deployment's <code>data/debtors.json</code>, then run <code>npm run build</code>.
+    </p>
+    <textarea
+      class="cost-modal-textarea"
+      data-cost-modal-textarea
+      readonly
+      spellcheck="false"
+    ></textarea>
+    <div class="cost-modal-actions">
+      <button type="button" class="admin-button" data-cost-modal-copy>
+        Copy to clipboard
+      </button>
+      <a
+        class="admin-button cost-modal-link"
+        href="https://github.com/Leonardboeker/pay-me-back#quick-start"
+        target="_blank"
+        rel="noreferrer noopener"
+      >
+        Open pay-me-back setup guide ↗
+      </a>
+    </div>
+  </div>
+</div>
+
+<script
+  is:inline
+  define:vars={{ slug, organizerToken, apiBase }}
+>
+  (function () {
+    'use strict';
+    const SAVE_DEBOUNCE_MS = 300;
+
+    const panel = document.querySelector('[data-cost-panel]');
+    if (!panel) return;
+    const hintEl = panel.querySelector('[data-cost-hint]');
+    const cardEl = panel.querySelector('[data-cost-card]');
+    const emptyEl = panel.querySelector('[data-cost-empty]');
+    const rowsEl = panel.querySelector('[data-cost-rows]');
+    const hotelLineEl = panel.querySelector('[data-cost-hotel-line]');
+    const hotelNameEl = panel.querySelector('[data-cost-hotel-name]');
+    const hotelTotalEl = panel.querySelector('[data-cost-hotel-total]');
+    const saveStateEl = panel.querySelector('[data-cost-save]');
+    const exportBtn = panel.querySelector('[data-cost-export]');
+
+    const modal = document.querySelector('[data-cost-modal]');
+    const modalTextarea = modal && modal.querySelector('[data-cost-modal-textarea]');
+    const modalBlurb = modal && modal.querySelector('[data-cost-modal-blurb]');
+    const modalCopy = modal && modal.querySelector('[data-cost-modal-copy]');
+    const modalClose = modal && modal.querySelector('[data-cost-modal-close]');
+
+    let participantsCache = [];
+    let saveTimer = null;
+
+    function setHint(text) {
+      if (hintEl) hintEl.textContent = text;
+    }
+    function setSaveState(text) {
+      if (saveStateEl) saveStateEl.textContent = text;
+    }
+
+    function fmtEur(n) {
+      const v = Number(n);
+      if (!Number.isFinite(v)) return '€0';
+      return '€' + Math.round(v);
+    }
+
+    function rowHtml(p) {
+      const esc = (s) => String(s).replace(/[&<>"]/g, (c) =>
+        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])
+      );
+      return (
+        '<tr data-cost-row data-token="' + esc(p.token) + '">' +
+          '<td>' + esc(p.name) + '</td>' +
+          '<td class="cost-num"><input type="number" min="0" step="1" data-field="hotelShareEur" value="' + (p.hotelShareEur || 0) + '" inputmode="numeric" /></td>' +
+          '<td class="cost-num"><input type="number" min="0" step="1" data-field="flightEur" value="' + (p.flightEur || 0) + '" inputmode="numeric" /></td>' +
+          '<td class="cost-num"><input type="number" min="0" step="1" data-field="otherEur" value="' + (p.otherEur || 0) + '" inputmode="numeric" /></td>' +
+          '<td class="cost-num" data-cost-total>' + fmtEur(p.totalEur) + '</td>' +
+          '<td><input type="text" data-field="notes" value="' + esc(p.notes || '') + '" placeholder="optional" /></td>' +
+        '</tr>'
+      );
+    }
+
+    function render(data) {
+      participantsCache = data.participants || [];
+      if (cardEl) cardEl.hidden = false;
+      if (emptyEl) emptyEl.hidden = true;
+      if (rowsEl) {
+        rowsEl.innerHTML = participantsCache.map(rowHtml).join('');
+      }
+      if (data.chosenHotel && hotelLineEl) {
+        hotelLineEl.hidden = false;
+        if (hotelNameEl) hotelNameEl.textContent = data.chosenHotel.name || '—';
+        if (hotelTotalEl) {
+          const t = data.chosenHotel.totalPriceEur;
+          hotelTotalEl.textContent = typeof t === 'number' ? ' (' + fmtEur(t) + ' total)' : '';
+        }
+      }
+      const n = participantsCache.length;
+      setHint(
+        n + ' participant' + (n === 1 ? '' : 's') +
+        (data.defaultsApplied ? ' — using defaults (no overrides saved yet)' : ' — overrides saved')
+      );
+      setSaveState('Saved.');
+    }
+
+    function collectSplits() {
+      const splits = [];
+      if (!rowsEl) return splits;
+      rowsEl.querySelectorAll('[data-cost-row]').forEach((tr) => {
+        const token = tr.getAttribute('data-token') || '';
+        const get = (field) => {
+          const el = tr.querySelector('[data-field="' + field + '"]');
+          return el ? el.value : '';
+        };
+        splits.push({
+          token,
+          hotelShareEur: Number(get('hotelShareEur')) || 0,
+          flightEur: Number(get('flightEur')) || 0,
+          otherEur: Number(get('otherEur')) || 0,
+          notes: String(get('notes') || ''),
+        });
+      });
+      return splits;
+    }
+
+    function recomputeRowTotal(tr) {
+      if (!tr) return;
+      const get = (field) => {
+        const el = tr.querySelector('[data-field="' + field + '"]');
+        return Number(el && el.value) || 0;
+      };
+      const total = get('hotelShareEur') + get('flightEur') + get('otherEur');
+      const totalCell = tr.querySelector('[data-cost-total]');
+      if (totalCell) totalCell.textContent = fmtEur(total);
+    }
+
+    async function fetchOnce() {
+      try {
+        const url = apiBase + '/api/admin/cost-split?slug=' + encodeURIComponent(slug);
+        const res = await fetch(url, {
+          headers: { 'X-Organizer-Token': organizerToken, Accept: 'application/json' },
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        render(data);
+      } catch (err) {
+        setHint('Load failed: ' + (err && err.message));
+        if (cardEl) cardEl.hidden = true;
+        if (emptyEl) {
+          emptyEl.hidden = false;
+          emptyEl.textContent = 'Could not load cost split: ' + (err && err.message);
+        }
+      }
+    }
+
+    async function persistSplits() {
+      const splits = collectSplits();
+      setSaveState('Saving…');
+      try {
+        const url = apiBase + '/api/admin/cost-split?slug=' + encodeURIComponent(slug);
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'X-Organizer-Token': organizerToken,
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          body: JSON.stringify({ splits }),
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        setSaveState('Saved.');
+      } catch (err) {
+        setSaveState('Save failed: ' + (err && err.message));
+      }
+    }
+
+    function scheduleSave() {
+      if (saveTimer) clearTimeout(saveTimer);
+      setSaveState('Editing…');
+      saveTimer = setTimeout(persistSplits, SAVE_DEBOUNCE_MS);
+    }
+
+    if (rowsEl) {
+      rowsEl.addEventListener('input', (e) => {
+        const target = e.target;
+        if (!target || !target.hasAttribute || !target.hasAttribute('data-field')) return;
+        const tr = target.closest('[data-cost-row]');
+        recomputeRowTotal(tr);
+        scheduleSave();
+      });
+    }
+
+    async function openExportModal() {
+      if (!modal) return;
+      // Persist any pending edits first so the export reflects what the
+      // organiser sees on screen.
+      if (saveTimer) {
+        clearTimeout(saveTimer);
+        await persistSplits();
+      }
+      let data;
+      try {
+        const url = apiBase + '/api/admin/export-paymeback?slug=' + encodeURIComponent(slug);
+        const res = await fetch(url, {
+          headers: { 'X-Organizer-Token': organizerToken, Accept: 'application/json' },
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        data = await res.json();
+      } catch (err) {
+        alert('Export failed: ' + (err && err.message));
+        return;
+      }
+      const debtors = (data && data.debtors) || [];
+      if (modalTextarea) {
+        modalTextarea.value = JSON.stringify(debtors, null, 2);
+      }
+      if (modalBlurb && data) {
+        const meta = (data.destination ? data.destination : '') +
+          (data.dateLabel ? ' — ' + data.dateLabel : '');
+        modalBlurb.textContent =
+          'Export for ' + meta + '. Paste into pay-me-back\'s data/debtors.json, then npm run build.';
+      }
+      modal.hidden = false;
+    }
+
+    function closeExportModal() {
+      if (modal) modal.hidden = true;
+    }
+
+    if (exportBtn) exportBtn.addEventListener('click', openExportModal);
+    if (modalClose) modalClose.addEventListener('click', closeExportModal);
+    if (modal) {
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeExportModal();
+      });
+    }
+    if (modalCopy && modalTextarea) {
+      modalCopy.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(modalTextarea.value);
+          modalCopy.textContent = 'Copied!';
+          setTimeout(() => { modalCopy.textContent = 'Copy to clipboard'; }, 1600);
+        } catch {
+          // Fallback: select-all so the user can ctrl+c.
+          modalTextarea.focus();
+          modalTextarea.select();
+        }
+      });
+    }
+
+    // Reveal + fetch when the parent admin page tells us the poll is closed.
+    // Idempotent — multiple emissions just re-fetch the latest state.
+    let initialised = false;
+    function reveal() {
+      panel.hidden = false;
+      if (!initialised) {
+        initialised = true;
+        fetchOnce();
+      } else {
+        fetchOnce();
+      }
+    }
+    document.addEventListener('whenwego:poll-closed', reveal);
+    // If the parent emitted before we attached, check a data attribute fallback.
+    if (document.body && document.body.dataset && document.body.dataset.pollClosed === 'true') {
+      reveal();
+    }
+  })();
+</script>
+
+<style>
+  .cost-section { margin: 0 0 24px; }
+  .cost-section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 0 0 10px;
+    flex-wrap: wrap;
+  }
+  .cost-section h2 {
+    margin: 0;
+    font-family: var(--font-headline, 'Syne', sans-serif);
+    font-size: 20px;
+  }
+  .cost-section-hint {
+    font-family: var(--font-label, 'JetBrains Mono', monospace);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-on-surface-variant);
+  }
+  .cost-blurb {
+    margin: 0 0 12px;
+    font-size: 13px;
+    color: var(--color-on-surface-variant);
+  }
+  .cost-card {
+    padding: 16px 18px;
+    background: var(--color-surface-container-low);
+    border: 2px solid var(--color-outline);
+  }
+  .cost-hotel-line {
+    margin: 0 0 12px;
+    padding: 8px 12px;
+    background: var(--color-surface-container);
+    font-family: var(--font-label, 'JetBrains Mono', monospace);
+    font-size: 12px;
+    color: var(--color-on-surface-variant);
+  }
+  .cost-hotel-line strong {
+    color: var(--color-on-background);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-right: 6px;
+  }
+  .cost-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--font-body, 'Space Mono', monospace);
+    font-size: 14px;
+  }
+  .cost-table th,
+  .cost-table td {
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--color-outline);
+    vertical-align: middle;
+  }
+  .cost-table th {
+    font-family: var(--font-label, 'JetBrains Mono', monospace);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-on-surface-variant);
+  }
+  .cost-num { text-align: right; }
+  .cost-table input[type="number"] {
+    width: 80px;
+    padding: 4px 6px;
+    font-family: var(--font-label, 'JetBrains Mono', monospace);
+    font-size: 13px;
+    text-align: right;
+    border: 1px solid var(--color-outline);
+    background: var(--color-surface-container);
+    color: var(--color-on-background);
+  }
+  .cost-table input[type="text"] {
+    width: 100%;
+    min-width: 140px;
+    padding: 4px 6px;
+    font-family: var(--font-body, 'Space Mono', monospace);
+    font-size: 13px;
+    border: 1px solid var(--color-outline);
+    background: var(--color-surface-container);
+    color: var(--color-on-background);
+  }
+  .cost-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-top: 14px;
+    flex-wrap: wrap;
+  }
+  .cost-save-state {
+    font-family: var(--font-label, 'JetBrains Mono', monospace);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-on-surface-variant);
+  }
+  .cost-empty {
+    margin: 0;
+    padding: 12px 14px;
+    background: var(--color-surface-container-low);
+    border: 1px dashed var(--color-outline);
+    font-family: var(--font-label, 'JetBrains Mono', monospace);
+    font-size: 12px;
+    color: var(--color-on-surface-variant);
+  }
+
+  .cost-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    z-index: 50;
+  }
+  .cost-modal {
+    width: 100%;
+    max-width: 720px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--color-surface, #fff);
+    border: 2px solid var(--color-on-background);
+    box-shadow: 6px 6px 0 var(--color-on-background);
+    padding: 18px 20px;
+  }
+  .cost-modal-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 0 0 10px;
+  }
+  .cost-modal-head h3 {
+    margin: 0;
+    font-family: var(--font-headline, 'Syne', sans-serif);
+    font-size: 18px;
+  }
+  .cost-modal-close {
+    background: none;
+    border: none;
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+    color: var(--color-on-background);
+    padding: 0 6px;
+  }
+  .cost-modal-blurb {
+    margin: 0 0 12px;
+    font-size: 13px;
+    color: var(--color-on-surface-variant);
+  }
+  .cost-modal-textarea {
+    flex: 1;
+    min-height: 280px;
+    width: 100%;
+    font-family: var(--font-label, 'JetBrains Mono', monospace);
+    font-size: 12px;
+    line-height: 1.45;
+    padding: 10px;
+    border: 1px solid var(--color-outline);
+    background: var(--color-surface-container-low);
+    color: var(--color-on-background);
+    resize: vertical;
+  }
+  .cost-modal-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 14px;
+    flex-wrap: wrap;
+  }
+  .cost-modal-link {
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+  }
+</style>

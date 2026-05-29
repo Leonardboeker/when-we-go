@@ -3,6 +3,7 @@
 // Phase 2: organiser dashboard. Static skeleton + live data via /api/admin/poll.
 import type { GetStaticPaths } from 'astro';
 import BaseLayout from '../../../layouts/BaseLayout.astro';
+import CostSplitPanel from '../../../components/CostSplitPanel.astro';
 import { polls, type Poll } from '../../../data/polls';
 import { daysUntil } from '../../../lib/calendar';
 
@@ -136,6 +137,12 @@ const publicApiBase =
       </table>
     </section>
 
+    <CostSplitPanel
+      slug={poll.slug}
+      organizerToken={poll.organizerToken}
+      apiBase={publicApiBase}
+    />
+
     <p class="admin-foot-note" data-admin-foot>
       Auto-refreshes every 30 seconds.
     </p>
@@ -181,6 +188,12 @@ const publicApiBase =
         isClosed = !!data.closed;
         if (statusEl) {
           statusEl.textContent = isClosed ? 'Closed' : statusEl.textContent;
+        }
+        // Phase 10: reveal the CostSplitPanel once we know the poll is closed.
+        // Dataset flag covers race where the panel script runs after this fire.
+        if (isClosed) {
+          if (document.body) document.body.dataset.pollClosed = 'true';
+          document.dispatchEvent(new CustomEvent('whenwego:poll-closed'));
         }
 
         // Voters table

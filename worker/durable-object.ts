@@ -146,6 +146,18 @@ export class WhenWeGoPollDO extends DurableObject {
         expires_at   INTEGER NOT NULL
       );
     `);
+    // Phase 10 — per-participant cost split (hotel share + flight + other).
+    // One row per participant token; absence = "no override stored yet" and
+    // the handler falls back to computed defaults.
+    this.sql.exec(`
+      CREATE TABLE IF NOT EXISTS cost_split (
+        token            TEXT PRIMARY KEY,
+        hotel_share_eur  INTEGER NOT NULL DEFAULT 0,
+        flight_eur       INTEGER NOT NULL DEFAULT 0,
+        other_eur        INTEGER NOT NULL DEFAULT 0,
+        notes            TEXT
+      );
+    `);
   }
 
   // Bulk-replace votes for a token in one DO method call (CONTEXT A-04).
@@ -386,6 +398,64 @@ export class WhenWeGoPollDO extends DurableObject {
       expiresAt
     );
   }
+
+  // ─── Phase 10: cost_split (pay-me-back integration) ────────────────────
+  // Upsert semantics — caller doesn't need to know if a row exists.
+  // hotel/flight/other are integer EUR (rounded up at compute time).
+  // Absence of a row = "no override stored"; handler falls back to defaults.
+  getCostSplit(token: string): CostSplitRow | null {
+    const rows = this.sql
+      .exec(
+        `SELECT token, hotel_share_eur, flight_eur, other_eur, notes
+         FROM cost_split WHERE token = ? LIMIT 1`,
+        token
+      )
+      .toArray() as unknown as CostSplitRow[];
+    return rows[0] ?? null;
+  }
+
+  getAllCostSplits(): CostSplitRow[] {
+    return this.sql
+      .exec(
+        `SELECT token, hotel_share_eur, flight_eur, other_eur, notes
+         FROM cost_split ORDER BY token ASC`
+      )
+      .toArray() as unknown as CostSplitRow[];
+  }
+
+  setCostSplit(
+    token: string,
+    split: {
+      hotelShareEur: number;
+      flightEur: number;
+      otherEur: number;
+      notes?: string;
+    }
+  ): void {
+    this.sql.exec(
+      `INSERT INTO cost_split (token, hotel_share_eur, flight_eur, other_eur, notes)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(token) DO UPDATE SET
+         hotel_share_eur = excluded.hotel_share_eur,
+         flight_eur      = excluded.flight_eur,
+         other_eur       = excluded.other_eur,
+         notes           = excluded.notes`,
+      token,
+      Math.max(0, Math.round(split.hotelShareEur)),
+      Math.max(0, Math.round(split.flightEur)),
+      Math.max(0, Math.round(split.otherEur)),
+      split.notes ?? null
+    );
+  }
+}
+
+// Phase 10 cost_split row shape (snake_case = SQLite column names).
+export interface CostSplitRow {
+  token: string;
+  hotel_share_eur: number;
+  flight_eur: number;
+  other_eur: number;
+  notes: string | null;
 }
 
 // Phase 9 reminder-type literal — kept as a union string so cron + admin

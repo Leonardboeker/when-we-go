@@ -18,6 +18,10 @@
 //     GET  /api/admin/reminder-status  per-participant per-type sent status
 //     POST /api/admin/send-reminder    force-fire a specific reminder type
 //     POST /api/admin/clear-reminder   clear one reminder row (force re-send)
+//   Phase 10:
+//     GET  /api/admin/cost-split       per-participant split (stored + defaults)
+//     POST /api/admin/cost-split       bulk update split rows
+//     GET  /api/admin/export-paymeback pay-me-back-shaped JSON export
 //
 // Cron: hourly auto-close per wrangler.toml. Also drives the reminder cron
 // (Phase 9, scheduled.ts) using the same trigger — no new cron required.
@@ -34,6 +38,8 @@ import { handleAdminResendSummary } from './handlers/admin-resend-summary';
 import { handleAdminReminderStatus } from './handlers/admin-reminders';
 import { handleAdminSendReminder } from './handlers/admin-send-reminder';
 import { handleAdminClearReminder } from './handlers/admin-clear-reminder';
+import { handleAdminCostSplit } from './handlers/admin-cost-split';
+import { handleAdminExportPaymeback } from './handlers/admin-export-paymeback';
 import { handleScheduled } from './scheduled';
 
 export { WhenWeGoPollDO };
@@ -42,8 +48,8 @@ const router = new Router();
 
 router.get('/api/health', (req, _env, _ctx) => {
   const env = _env as Env;
-  // Phase number reflects the most-recent shipped phase. Bumped 8 → 9.
-  return jsonResponse({ ok: true, phase: 9 }, { status: 200 }, req, env);
+  // Phase number reflects the most-recent shipped phase. Bumped 9 → 10.
+  return jsonResponse({ ok: true, phase: 10 }, { status: 200 }, req, env);
 });
 
 router.get('/api/poll', (req, env, ctx) =>
@@ -75,6 +81,16 @@ router.post('/api/admin/send-reminder', (req, env, ctx) =>
 );
 router.post('/api/admin/clear-reminder', (req, env, ctx) =>
   handleAdminClearReminder(req, env as Env, ctx)
+);
+// Phase 10 — split-costs + pay-me-back JSON export.
+router.get('/api/admin/cost-split', (req, env, ctx) =>
+  handleAdminCostSplit(req, env as Env, ctx)
+);
+router.post('/api/admin/cost-split', (req, env, ctx) =>
+  handleAdminCostSplit(req, env as Env, ctx)
+);
+router.get('/api/admin/export-paymeback', (req, env, ctx) =>
+  handleAdminExportPaymeback(req, env as Env, ctx)
 );
 
 export default {

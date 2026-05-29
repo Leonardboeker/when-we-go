@@ -543,6 +543,135 @@ if (!ORG_TOKEN || PARTICIPANTS.length === 0) {
   });
 }
 
+// (8) Phase 10 — cost-split + pay-me-back export
+console.log('\n(8) Cost-split + pay-me-back export flow:');
+if (!ORG_TOKEN || PARTICIPANTS.length === 0) {
+  await check('GET /api/admin/cost-split', async () => ({ skip: 'needs SMOKE_ORGANIZER_TOKEN + SMOKE_TOKENS' }));
+} else {
+  await check('GET /api/admin/cost-split with org -> 200 + correct shape', async () => {
+    const { status, json } = await fetchJson(
+      `${BASE}/api/admin/cost-split?slug=${encodeURIComponent(SLUG)}`,
+      { headers: { 'X-Organizer-Token': ORG_TOKEN } }
+    );
+    if (status !== 200) return `status ${status} body=${JSON.stringify(json)}`;
+    if (!json || json.ok !== true) return 'ok flag missing';
+    if (!Array.isArray(json.participants)) return 'participants not array';
+    if (json.participants.length === 0) return 'participants array empty';
+    for (const p of json.participants) {
+      for (const k of ['token', 'name', 'hotelShareEur', 'flightEur', 'otherEur', 'totalEur']) {
+        if (!(k in p)) return `participant missing ${k}`;
+      }
+    }
+    return true;
+  });
+
+  await check('POST /api/admin/cost-split persists -> 200 + updated count', async () => {
+    // Set each known participant to a distinct trio so re-GET can verify.
+    const splits = PARTICIPANTS.map((p, i) => ({
+      token: p.token,
+      hotelShareEur: 100 + i,
+      flightEur: 50 + i * 2,
+      otherEur: i,
+      notes: `smoke-test note ${i}`,
+    }));
+    const { status, json } = await fetchJson(
+      `${BASE}/api/admin/cost-split?slug=${encodeURIComponent(SLUG)}`,
+      {
+        method: 'POST',
+        headers: { 'X-Organizer-Token': ORG_TOKEN, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ splits }),
+      }
+    );
+    if (status !== 200) return `status ${status} body=${JSON.stringify(json)}`;
+    if (!json || json.ok !== true) return 'ok flag missing';
+    if (json.updated !== splits.length) return `updated=${json.updated} expected ${splits.length}`;
+    return true;
+  });
+
+  await check('GET /api/admin/cost-split after POST -> returns saved values', async () => {
+    const { status, json } = await fetchJson(
+      `${BASE}/api/admin/cost-split?slug=${encodeURIComponent(SLUG)}`,
+      { headers: { 'X-Organizer-Token': ORG_TOKEN } }
+    );
+    if (status !== 200) return `status ${status}`;
+    if (!json || !Array.isArray(json.participants)) return 'participants missing';
+    if (json.defaultsApplied !== false) return `defaultsApplied=${json.defaultsApplied} expected false after POST`;
+    const me = json.participants.find((p) => p.token === PARTICIPANTS[0].token);
+    if (!me) return `did not find first participant in response`;
+    if (me.hotelShareEur !== 100) return `hotelShareEur=${me.hotelShareEur} expected 100`;
+    if (me.flightEur !== 50) return `flightEur=${me.flightEur} expected 50`;
+    if (me.otherEur !== 0) return `otherEur=${me.otherEur} expected 0`;
+    if (me.totalEur !== 150) return `totalEur=${me.totalEur} expected 150`;
+    if (me.notes !== 'smoke-test note 0') return `notes=${me.notes} expected smoke-test note 0`;
+    return true;
+  });
+
+  await check('GET /api/admin/cost-split with WRONG org -> 404', async () => {
+    const { status } = await fetchJson(
+      `${BASE}/api/admin/cost-split?slug=${encodeURIComponent(SLUG)}`,
+      { headers: { 'X-Organizer-Token': 'wrong-org-token-NEVER-valid' } }
+    );
+    if (status !== 404) return `status ${status} expected 404`;
+    return true;
+  });
+
+  await check('GET /api/admin/export-paymeback -> 200 + valid debtors array', async () => {
+    const { status, json } = await fetchJson(
+      `${BASE}/api/admin/export-paymeback?slug=${encodeURIComponent(SLUG)}`,
+      { headers: { 'X-Organizer-Token': ORG_TOKEN } }
+    );
+    if (status !== 200) return `status ${status} body=${JSON.stringify(json)}`;
+    if (!json || json.ok !== true) return 'ok flag missing';
+    if (!Array.isArray(json.debtors)) return 'debtors not array';
+    if (json.debtors.length !== PARTICIPANTS.length) {
+      return `debtors.length=${json.debtors.length} expected ${PARTICIPANTS.length}`;
+    }
+    // Required pay-me-back fields per debtor.
+    for (const d of json.debtors) {
+      for (const k of ['token', 'name', 'amount', 'backstory', 'characterSlug', 'createdAt']) {
+        if (!(k in d)) return `debtor missing ${k}: ${JSON.stringify(d)}`;
+      }
+      if (typeof d.token !== 'string' || d.token.length < 8) return `bad token: ${d.token}`;
+      if (typeof d.name !== 'string') return `bad name: ${d.name}`;
+      if (typeof d.amount !== 'number') return `amount not number: ${d.amount}`;
+      if (typeof d.backstory !== 'string') return `backstory not string`;
+      if (typeof d.createdAt !== 'string') return `createdAt not string`;
+    }
+    // Privacy boundary — export tokens MUST NOT reuse when-we-go participant tokens.
+    const wwgTokens = new Set(PARTICIPANTS.map((p) => p.token));
+    for (const d of json.debtors) {
+      if (wwgTokens.has(d.token)) {
+        return `export token ${d.token} reused from when-we-go participant tokens (privacy leak!)`;
+      }
+    }
+    // All export tokens unique among themselves.
+    const seen = new Set();
+    for (const d of json.debtors) {
+      if (seen.has(d.token)) return `duplicate export token: ${d.token}`;
+      seen.add(d.token);
+    }
+    // Sanity-check amount math vs what we just saved.
+    const me = json.debtors.find((d) => d.name === PARTICIPANTS[0].name);
+    if (me && me.amount !== 150) {
+      return `first participant amount=${me.amount} expected 150 (100+50+0)`;
+    }
+    // Log two example tokens to confirm freshness.
+    if (json.debtors.length >= 2) {
+      console.log(`        [info] export tokens (first two): ${json.debtors[0].token}, ${json.debtors[1].token}`);
+    }
+    return true;
+  });
+
+  await check('GET /api/admin/export-paymeback with WRONG org -> 404', async () => {
+    const { status } = await fetchJson(
+      `${BASE}/api/admin/export-paymeback?slug=${encodeURIComponent(SLUG)}`,
+      { headers: { 'X-Organizer-Token': 'wrong-org-token-NEVER-valid' } }
+    );
+    if (status !== 404) return `status ${status} expected 404`;
+    return true;
+  });
+}
+
 const elapsed = ((Date.now() - started) / 1000).toFixed(2);
 console.log('\n' + '-'.repeat(60));
 console.log(`[smoke] ${pass} passed, ${fail} failed, ${skipped} skipped (${elapsed}s)`);
