@@ -38,6 +38,10 @@ export interface Env {
   // (deterministic per-destination evergreen lookup). When set, the real
   // ClaudeActivityProvider drives structured-output calls to Haiku.
   WHENWEGO_ANTHROPIC_API_KEY?: string;
+  // Phase 5 real provider — Kiwi.com Tequila (free tier, no CC needed).
+  // Sign up: https://tequila.kiwi.com/portal/login
+  // When unset, getFlightProvider() falls back to MockFlightProvider.
+  WHENWEGO_KIWI_API_KEY?: string;
 }
 
 export type VoteState = 'yes' | 'maybe' | 'no';

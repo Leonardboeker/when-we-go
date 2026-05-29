@@ -51,4 +51,6 @@ WHENWEGO_SITE_URL = "http://localhost:4321"
 #   WHENWEGO_TELEGRAM_CHAT_ID     Optional — chat id that receives notifications
 #   WHENWEGO_RESEND_API_KEY       Optional — Resend.com API key for emails
 #   WHENWEGO_RESEND_FROM          Optional — sender, e.g. "team <hello@you.com>"
+#   WHENWEGO_ANTHROPIC_API_KEY    Optional — Phase 7 activity suggestions (Claude Haiku)
+#   WHENWEGO_KIWI_API_KEY         Optional — Phase 5 real flights (Kiwi.com Tequila, free tier)
 # ────────────────────────────────────────────────────────────────────────────
