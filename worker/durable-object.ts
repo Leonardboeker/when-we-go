@@ -26,6 +26,13 @@ export interface Env {
   // CORS allow-list (comma-separated). Defaults include localhost:4321/8787.
   ALLOWED_ORIGINS?: string;
   WHENWEGO_PHASE?: string;
+  // Phase 5 — Amadeus Self-Service API (flight search).
+  // Both client_id + client_secret optional secrets. When EITHER is missing,
+  // flights handlers return reason: 'not_configured' instead of throwing.
+  // ENV defaults to 'test' → https://test.api.amadeus.com (free tier).
+  WHENWEGO_AMADEUS_CLIENT_ID?: string;
+  WHENWEGO_AMADEUS_CLIENT_SECRET?: string;
+  WHENWEGO_AMADEUS_ENV?: string;
 }
 
 export type VoteState = 'yes' | 'maybe' | 'no';

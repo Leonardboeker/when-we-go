@@ -14,13 +14,14 @@ import type {
   ParticipantProfile,
   ReminderType,
 } from './durable-object';
-import { loadPolls } from './lib/polls-config';
-import { computeOverlap, type VoteRow } from './lib/overlap';
+import { loadPolls, type Poll } from './lib/polls-config';
+import { computeOverlap, type VoteRow, type Overlap } from './lib/overlap';
 import { notifyPollClose } from './lib/notify-pipeline';
 import { fanOutCloseSummaryEmails } from './lib/close-email-fanout';
 import { computeTripStart } from './lib/trip-date';
 import { isInReminderWindow } from './lib/reminder-window';
 import { fanOutReminders } from './lib/reminder-fanout';
+import { loadFlightsForParticipant } from './handlers/flights';
 
 const ALL_REMINDER_TYPES: ReminderType[] = ['T-30', 'T-7', 'T-1', 'T+1'];
 
@@ -81,6 +82,17 @@ export async function handleScheduled(
           })
         );
 
+        // Phase 5: fan-out flight fetches for every participant with a
+        // homeAirport. Promise.allSettled so a single slow/failed call
+        // doesn't block the others (and the entire close flow doesn't
+        // hang on Amadeus). Wrapped in try/catch so even total failure
+        // here doesn't break the close-summary email fan-out below.
+        try {
+          await fetchFlightsForCloseFanout(env, poll);
+        } catch (err) {
+          console.error(`[cron] flights pre-fetch failed for ${poll.slug}`, err);
+        }
+
         // Phase 8: per-participant close-summary emails (fire-and-forget).
         // Silently skipped when WHENWEGO_RESEND_API_KEY is unset.
         const allProfiles = await stub.getAllProfiles();
@@ -102,6 +114,8 @@ export async function handleScheduled(
       console.error(`[cron] error processing poll ${poll.slug}`, err);
     }
   }
+
+  // ─── helper: see fetchFlightsForCloseFanout below ───────────────────
 
   // Phase 9: reminder-check loop. Walks every poll, asks the DO for
   // poll_meta.trip_start, and for each reminder type that's currently inside
@@ -132,3 +146,38 @@ export async function handleScheduled(
     }
   }
 }
+
+/**
+ * Phase 5 — fetch + cache flights for every participant in parallel.
+ * Promise.allSettled so a single slow/failed Amadeus call doesn't block
+ * the others. When Amadeus is not configured, loadFlightsForParticipant
+ * returns { reason: 'not_configured', flights: [] } synchronously — no
+ * network call — so this is effectively a no-op without a key.
+ */
+async function fetchFlightsForCloseFanout(
+  env: Env,
+  poll: Poll
+): Promise<void> {
+  const results = await Promise.allSettled(
+    poll.participants.map((p) =>
+      loadFlightsForParticipant({ env, poll, token: p.token })
+    )
+  );
+  let ok = 0;
+  let skipped = 0;
+  let failed = 0;
+  for (const r of results) {
+    if (r.status === 'rejected') {
+      failed++;
+      continue;
+    }
+    if (r.value.reason === 'ok') ok++;
+    else skipped++;
+  }
+  console.log(
+    `[cron] flights pre-fetch for ${poll.slug}: ok=${ok} skipped=${skipped} failed=${failed}`
+  );
+}
+
+// Re-export type used inside the helper signature to keep the import surface tidy.
+export type { Overlap };

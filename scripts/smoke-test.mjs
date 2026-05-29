@@ -672,6 +672,146 @@ if (!ORG_TOKEN || PARTICIPANTS.length === 0) {
   });
 }
 
+// (9) Phase 5 — flights (PROVIDER-ABSTRACTED; mock impl always wired)
+console.log('\n(9) Flights flow (provider-abstracted, mock impl):');
+const VALID_FLIGHT_REASONS = new Set([
+  'ok',
+  'not_configured',  // legacy reason — still accepted in cache
+  'profile_incomplete',
+  'destination_unmapped',
+  'no_routes',
+  'api_down',        // legacy
+  'provider_error',
+]);
+if (PARTICIPANTS.length === 0) {
+  await check('GET /api/flights', async () => ({ skip: 'no SMOKE_TOKENS' }));
+} else {
+  const me = PARTICIPANTS[0];
+
+  // First, ensure participant has a profile with homeAirport so the mock can
+  // produce 'ok' results downstream. Idempotent — safe to re-run.
+  await check('POST /api/profile (set homeAirport for flight checks) -> 200', async () => {
+    const { status } = await fetchJson(`${BASE}/api/profile`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        slug: SLUG,
+        token: me.token,
+        profile: { email: 'smoke-test@example.com', homeAirport: 'MUC' },
+      }),
+    });
+    if (status !== 200) return `status ${status}`;
+    return true;
+  });
+
+  await check('GET /api/flights -> 200 + { reason:"ok", provider.isReal:false, flights.length>=3 }', async () => {
+    const { status, json } = await fetchJson(
+      `${BASE}/api/flights?slug=${encodeURIComponent(SLUG)}&token=${encodeURIComponent(me.token)}`
+    );
+    if (status !== 200) return `status ${status} body=${JSON.stringify(json)}`;
+    if (!json) return 'no JSON body';
+    if (!Array.isArray(json.flights)) return `flights not array: ${JSON.stringify(json.flights)}`;
+    if (!VALID_FLIGHT_REASONS.has(json.reason)) return `invalid reason "${json.reason}"`;
+    if (typeof json.fetchedAt !== 'number') return `fetchedAt not number: ${json.fetchedAt}`;
+    if (!json.provider || typeof json.provider.name !== 'string') {
+      return 'provider.{name} missing';
+    }
+    if (json.provider.isReal !== false) {
+      return `provider.isReal=${json.provider.isReal} expected false (mock)`;
+    }
+    if (json.reason === 'ok') {
+      if (json.flights.length < 3) return `flights.length=${json.flights.length} want >=3`;
+      // Every option from mock must be marked source:'mock'
+      for (const f of json.flights) {
+        if (f.source !== 'mock') return `flight source=${f.source} expected 'mock'`;
+      }
+    }
+    console.log(`        [info] flights reason=${json.reason} count=${json.flights.length} provider=${json.provider.name}`);
+    return true;
+  });
+
+  await check('GET /api/flights with wrong token -> 404', async () => {
+    const { status } = await fetchJson(
+      `${BASE}/api/flights?slug=${encodeURIComponent(SLUG)}&token=NEVER_VALID_TOKEN_zzz`
+    );
+    if (status !== 404) return `status ${status} expected 404`;
+    return true;
+  });
+
+  await check('POST /api/flights/refresh -> 200|429 + valid shape', async () => {
+    const { status, json } = await fetchJson(
+      `${BASE}/api/flights/refresh?slug=${encodeURIComponent(SLUG)}&token=${encodeURIComponent(me.token)}`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' } }
+    );
+    if (status !== 200 && status !== 429) {
+      return `status ${status} body=${JSON.stringify(json)}`;
+    }
+    if (status === 200) {
+      if (!json || !Array.isArray(json.flights)) return 'flights not array';
+      if (!VALID_FLIGHT_REASONS.has(json.reason)) return `invalid reason "${json.reason}"`;
+      if (!json.provider) return 'provider missing on refresh';
+    }
+    if (status === 429) {
+      if (typeof json.retryAfterMs !== 'number') return 'retryAfterMs not number on 429';
+    }
+    return true;
+  });
+
+  // Deterministic-mock contract: same query → identical first option across
+  // two consecutive GETs. (The 24h cache also enforces this, so we'd see
+  // identical results regardless; the test confirms the contract holds.)
+  await check('GET /api/flights twice -> identical first flight (determinism)', async () => {
+    const { json: a } = await fetchJson(
+      `${BASE}/api/flights?slug=${encodeURIComponent(SLUG)}&token=${encodeURIComponent(me.token)}`
+    );
+    const { json: b } = await fetchJson(
+      `${BASE}/api/flights?slug=${encodeURIComponent(SLUG)}&token=${encodeURIComponent(me.token)}`
+    );
+    if (a.reason !== 'ok' || b.reason !== 'ok') return `reasons a=${a.reason} b=${b.reason}`;
+    if (a.flights.length === 0 || b.flights.length === 0) return 'empty flights';
+    if (a.flights[0].carrierCode !== b.flights[0].carrierCode ||
+        a.flights[0].priceEur !== b.flights[0].priceEur) {
+      return 'non-deterministic first option between calls';
+    }
+    return true;
+  });
+}
+
+if (!ORG_TOKEN) {
+  await check('GET /api/admin/flights', async () => ({ skip: 'no SMOKE_ORGANIZER_TOKEN' }));
+} else {
+  await check('GET /api/admin/flights with org -> 200 + participants[] + provider.{name,isReal}', async () => {
+    const { status, json } = await fetchJson(
+      `${BASE}/api/admin/flights?slug=${encodeURIComponent(SLUG)}`,
+      { headers: { 'X-Organizer-Token': ORG_TOKEN } }
+    );
+    if (status !== 200) return `status ${status}`;
+    if (!json || json.ok !== true) return 'ok flag missing';
+    if (!Array.isArray(json.participants)) return 'participants not array';
+    if (!json.provider || typeof json.provider.name !== 'string') return 'provider missing';
+    if (json.provider.isReal !== false) {
+      return `provider.isReal=${json.provider.isReal} expected false (mock)`;
+    }
+    for (const p of json.participants) {
+      if (typeof p.token !== 'string') return `participant token not string`;
+      if (typeof p.name !== 'string') return `participant name not string`;
+      if (!VALID_FLIGHT_REASONS.has(p.reason) && p.reason !== 'not_fetched') {
+        return `participant reason "${p.reason}" not in enum`;
+      }
+    }
+    return true;
+  });
+
+  await check('GET /api/admin/flights with WRONG org -> 404', async () => {
+    const { status } = await fetchJson(
+      `${BASE}/api/admin/flights?slug=${encodeURIComponent(SLUG)}`,
+      { headers: { 'X-Organizer-Token': 'wrong-org-token-NEVER-valid' } }
+    );
+    if (status !== 404) return `status ${status} expected 404`;
+    return true;
+  });
+}
+
 const elapsed = ((Date.now() - started) / 1000).toFixed(2);
 console.log('\n' + '-'.repeat(60));
 console.log(`[smoke] ${pass} passed, ${fail} failed, ${skipped} skipped (${elapsed}s)`);

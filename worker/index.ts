@@ -40,6 +40,9 @@ import { handleAdminSendReminder } from './handlers/admin-send-reminder';
 import { handleAdminClearReminder } from './handlers/admin-clear-reminder';
 import { handleAdminCostSplit } from './handlers/admin-cost-split';
 import { handleAdminExportPaymeback } from './handlers/admin-export-paymeback';
+import { handleFlights } from './handlers/flights';
+import { handleFlightsRefresh } from './handlers/flights-refresh';
+import { handleAdminFlights } from './handlers/admin-flights';
 import { handleScheduled } from './scheduled';
 
 export { WhenWeGoPollDO };
@@ -48,8 +51,8 @@ const router = new Router();
 
 router.get('/api/health', (req, _env, _ctx) => {
   const env = _env as Env;
-  // Phase number reflects the most-recent shipped phase. Bumped 9 → 10.
-  return jsonResponse({ ok: true, phase: 10 }, { status: 200 }, req, env);
+  // Phase number reflects total shipped phases (Phase 5 lands AFTER 10).
+  return jsonResponse({ ok: true, phase: 11 }, { status: 200 }, req, env);
 });
 
 router.get('/api/poll', (req, env, ctx) =>
@@ -91,6 +94,17 @@ router.post('/api/admin/cost-split', (req, env, ctx) =>
 );
 router.get('/api/admin/export-paymeback', (req, env, ctx) =>
   handleAdminExportPaymeback(req, env as Env, ctx)
+);
+// Phase 5 — flights (Amadeus). Graceful: when Amadeus keys unset, every
+// response is 200 + { reason: 'not_configured', flights: [] }.
+router.get('/api/flights', (req, env, ctx) =>
+  handleFlights(req, env as Env, ctx)
+);
+router.post('/api/flights/refresh', (req, env, ctx) =>
+  handleFlightsRefresh(req, env as Env, ctx)
+);
+router.get('/api/admin/flights', (req, env, ctx) =>
+  handleAdminFlights(req, env as Env, ctx)
 );
 
 export default {

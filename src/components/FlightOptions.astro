@@ -1,0 +1,209 @@
+---
+// src/components/FlightOptions.astro
+// Phase 5 — post-close flight options widget. Renders empty (hidden) on SSR;
+// the parent [token].astro page IIFE populates it after the poll closes.
+//
+// Wire-up (in [token].astro):
+//   - On poll close + reason='ok': fill cards from /api/flights response
+//   - On reason !== 'ok': show the matching message variant
+//   - Refresh button calls POST /api/flights/refresh — disabled for 1h after
+//     a successful refresh
+//
+// Layout:
+//   - Header row with title + "Refresh" button
+//   - 3 cheapest cards
+//   - "See all options" collapsible (rest of the list)
+//   - State messages (one of: configure / profile / no_routes / api_down)
+---
+
+<section
+  id="flight-options"
+  class="flight-options"
+  hidden
+  aria-labelledby="flight-options-title"
+>
+  <div class="flight-options-header">
+    <h2 id="flight-options-title" class="flight-options-title">Flights for you</h2>
+    <button
+      type="button"
+      class="flight-options-refresh"
+      data-flights-refresh
+      disabled
+    >
+      Refresh prices
+    </button>
+  </div>
+
+  {/* Phase 5: when provider.isReal === false, render a yellow striped DEMO
+      banner above the flight cards so participants know prices are mock. */}
+  <div class="flight-options-demo-banner" data-flights-demo-banner hidden>
+    <strong>📍 DEMO flight data</strong> — real provider not configured yet.
+    Prices are illustrative; use Google Flights / Skyscanner for actual booking.
+  </div>
+
+  <p class="flight-options-meta" data-flights-meta hidden></p>
+
+  <!-- State messages — exactly one shown depending on reason. -->
+  <div class="flight-options-state" data-flights-state hidden>
+    <p data-flights-state-text></p>
+    <a
+      class="flight-options-google-link"
+      data-flights-google-link
+      href="#"
+      target="_blank"
+      rel="noopener"
+      hidden
+      >Try Google Flights instead →</a
+    >
+  </div>
+
+  <ul class="flight-options-list" data-flights-list hidden></ul>
+
+  <details class="flight-options-more" data-flights-more hidden>
+    <summary>See all options</summary>
+    <ul class="flight-options-rest" data-flights-rest></ul>
+  </details>
+
+  <p class="flight-options-disclaimer">
+    Doesn't include low-cost carriers — check Skyscanner separately for those.
+  </p>
+</section>
+
+<style>
+  .flight-options {
+    margin: 24px 0;
+    padding: 16px;
+    background: var(--color-surface, #fff);
+    border: 3px solid var(--color-on-background, #1c1b1f);
+    box-shadow: 4px 4px 0 var(--color-primary, #6750a4);
+  }
+  .flight-options-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .flight-options-title {
+    margin: 0;
+    font-family: var(--font-label, 'JetBrains Mono', monospace);
+    font-size: 14px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .flight-options-refresh {
+    appearance: none;
+    border: 2px solid var(--color-on-background, #1c1b1f);
+    background: var(--color-primary-container, #eaddff);
+    color: var(--color-on-primary-container, #21005d);
+    padding: 6px 12px;
+    font-family: var(--font-label, 'JetBrains Mono', monospace);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+  }
+  .flight-options-refresh:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  .flight-options-meta {
+    margin: 0 0 12px 0;
+    font-size: 12px;
+    color: var(--color-on-surface-variant, #49454f);
+  }
+  .flight-options-demo-banner {
+    margin: 0 0 12px 0;
+    padding: 10px 12px;
+    font-size: 13px;
+    line-height: 1.4;
+    background: repeating-linear-gradient(
+      45deg,
+      #fff7d6,
+      #fff7d6 8px,
+      #ffeaa0 8px,
+      #ffeaa0 16px
+    );
+    border: 2px solid #1c1b1f;
+    color: #1c1b1f;
+  }
+  .flight-options-demo-banner strong {
+    display: inline-block;
+    margin-right: 4px;
+  }
+  .flight-options-state {
+    margin: 0;
+    padding: 12px;
+    background: var(--color-surface-variant, #f3edf7);
+    border: 2px dashed var(--color-on-background, #1c1b1f);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .flight-options-google-link {
+    display: inline-block;
+    margin-top: 8px;
+    font-weight: 700;
+    color: var(--color-primary, #6750a4);
+  }
+  .flight-options-list,
+  .flight-options-rest {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 8px;
+  }
+  .flight-options-list .flight-card.is-cheapest {
+    background: var(--color-primary-container, #eaddff);
+  }
+  .flight-card {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 12px;
+    padding: 12px;
+    border: 2px solid var(--color-on-background, #1c1b1f);
+    background: #fff;
+    align-items: center;
+  }
+  .flight-card-main strong {
+    font-size: 14px;
+  }
+  .flight-card-meta {
+    font-size: 12px;
+    color: var(--color-on-surface-variant, #49454f);
+    margin-top: 2px;
+  }
+  .flight-card-price {
+    font-family: var(--font-label, 'JetBrains Mono', monospace);
+    font-size: 18px;
+    font-weight: 900;
+  }
+  .flight-card-book {
+    display: inline-block;
+    margin-top: 4px;
+    font-size: 11px;
+    color: var(--color-primary, #6750a4);
+    font-weight: 700;
+    text-decoration: none;
+  }
+  .flight-options-more {
+    margin-top: 12px;
+  }
+  .flight-options-more summary {
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-primary, #6750a4);
+  }
+  .flight-options-disclaimer {
+    margin: 12px 0 0 0;
+    font-size: 11px;
+    color: var(--color-on-surface-variant, #49454f);
+    font-style: italic;
+  }
+</style>

@@ -27,9 +27,12 @@ import {
   renderT7Email,
   renderT1Email,
   renderTPlus1Email,
+  type FlightOption as EmailFlightOption,
 } from './email-templates';
 import { sendEmail } from './notify-pipeline';
 import { getForecast } from './weather';
+import { loadFlightsForParticipant } from '../handlers/flights';
+import type { FlightCachePayload } from './flights';
 
 export interface ReminderFanOutInput {
   env: Env;
@@ -47,6 +50,29 @@ export interface ReminderFanOutResult {
   failed: number;
   /** Per-failure notes for the admin endpoint. */
   errors: Array<{ name: string; reason: string }>;
+}
+
+/**
+ * Phase 5 — adapt our normalised flight cache to the email-template's
+ * FlightOption shape. Returns top 3 cheapest. Identical to the helper in
+ * close-email-fanout.ts; kept inline here to keep both modules self-contained
+ * (avoid circular imports between the two fan-outs).
+ */
+function flightsCacheToEmailShape(
+  cache: FlightCachePayload | null
+): EmailFlightOption[] {
+  if (!cache || cache.reason !== 'ok' || cache.flights.length === 0) return [];
+  const from = cache.origin.iata;
+  const to = cache.destination.iata;
+  return cache.flights.slice(0, 3).map((f) => ({
+    from,
+    to,
+    carrier: f.airline,
+    priceEur: Math.round(f.priceEur),
+    url: `https://www.google.com/travel/flights?q=${encodeURIComponent(
+      `Flights from ${from} to ${to} on ${cache.dateRange.start} returning ${cache.dateRange.end}`
+    )}`,
+  }));
 }
 
 export async function fanOutReminders(
@@ -127,6 +153,28 @@ export async function fanOutReminders(
 
       const participantPageUrl = `${siteUrl}/${poll.slug}/${participant.token}/`;
 
+      // Phase 5 — T-30 specifically force-refreshes flights before render so
+      // the participant gets the fresh "1 month out" prices. Other reminder
+      // types skip this (T-7/T-1/T+1 don't include flights).
+      let flightsRefreshed: EmailFlightOption[] = [];
+      if (type === 'T-30') {
+        try {
+          const cache = await loadFlightsForParticipant({
+            env,
+            poll,
+            token: participant.token,
+            forceRefresh: true,
+          });
+          flightsRefreshed = flightsCacheToEmailShape(cache);
+        } catch (err) {
+          console.error(
+            `[reminders] T-30 flight refresh failed for ${participant.name}`,
+            err
+          );
+          // graceful: fall through with empty flights — template handles empty
+        }
+      }
+
       // Render the right template per type.
       const rendered = renderForType({
         type,
@@ -137,6 +185,7 @@ export async function fanOutReminders(
         siteUrl,
         participantPageUrl,
         weatherForecast,
+        flightsRefreshed,
       });
 
       const sendRes = await sendEmail(env, {
@@ -202,6 +251,7 @@ function renderForType(args: {
   siteUrl: string;
   participantPageUrl: string;
   weatherForecast: Awaited<ReturnType<typeof getForecast>>;
+  flightsRefreshed: EmailFlightOption[];
 }) {
   const common = {
     poll: args.poll,
@@ -213,11 +263,12 @@ function renderForType(args: {
   };
   switch (args.type) {
     case 'T-30':
-      // Phase 5 not yet built — pass empty flights/hotels arrays. The
-      // template renders a graceful "prices update soon" line.
+      // Phase 5 — T-30 force-refreshes flights upstream; pass the refreshed
+      // list straight through. Empty array → template renders graceful
+      // "prices update soon" line.
       return renderT30Email({
         ...common,
-        flightsRefreshed: [],
+        flightsRefreshed: args.flightsRefreshed,
         hotels: [],
       });
     case 'T-7':

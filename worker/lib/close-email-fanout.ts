@@ -18,10 +18,12 @@ import type { Poll } from './polls-config';
 import type { Overlap, OverlapRange } from './overlap';
 import { addDaysIso, buildICalForPoll } from './ical';
 import { buildAllCalendarLinks } from './calendar-links';
-import { renderCloseSummaryEmail } from './email-templates';
+import { renderCloseSummaryEmail, type FlightOption as EmailFlightOption } from './email-templates';
 import { sendEmail } from './notify-pipeline';
 import { computeTripStart } from './trip-date';
 import type { WhenWeGoPollDO } from '../durable-object';
+import type { FlightCachePayload } from './flights';
+import { getFlightProvider } from './flight-provider';
 
 export interface FanOutInput {
   env: Env;
@@ -52,10 +54,77 @@ function pickRange(overlap: Overlap): OverlapRange | null {
   return overlap.ranges[0] ?? null;
 }
 
+/**
+ * Phase 5 — convert our normalised flights into the email's FlightOption
+ * shape. Email expects { from, to, carrier, priceEur, url }; our cache
+ * carries { airline, carrierCode, priceEur, ... }. Returns top 3 cheapest.
+ */
+function flightsCacheToEmailShape(
+  cache: FlightCachePayload | null
+): EmailFlightOption[] {
+  if (!cache || cache.reason !== 'ok' || cache.flights.length === 0) return [];
+  const from = cache.origin.iata;
+  const to = cache.destination.iata;
+  return cache.flights.slice(0, 3).map((f) => ({
+    from,
+    to,
+    carrier: f.airline,
+    priceEur: Math.round(f.priceEur),
+    // Google Flights search prefilled with the route + dates — the closest
+    // thing to a deep link we can do on the Amadeus free tier.
+    url: buildGoogleFlightsUrl({
+      from,
+      to,
+      depart: cache.dateRange.start,
+      ret: cache.dateRange.end,
+    }),
+  }));
+}
+
+function buildGoogleFlightsUrl(args: {
+  from: string;
+  to: string;
+  depart: string;
+  ret: string;
+}): string {
+  // Google Flights URL pattern: /travel/flights?q=Flights+from+X+to+Y+on+Z+returning+W
+  const q = `Flights from ${args.from} to ${args.to} on ${args.depart} returning ${args.ret}`;
+  return `https://www.google.com/travel/flights?q=${encodeURIComponent(q)}`;
+}
+
 export async function fanOutCloseSummaryEmails(
   args: FanOutInput
 ): Promise<FanOutResult> {
   const { env, poll, overlap, profilesByToken, ctx, awaitAll = false } = args;
+
+  // Phase 5 — pre-fetch the flight cache for every participant in one parallel
+  // batch (DO method calls don't pool, but Promise.all keeps the wall-clock
+  // bounded by the slowest read). Empty/missing cache → empty flights for
+  // that participant; the email template gracefully omits the FLIGHTS section.
+  const featured = pickRange(overlap);
+  const datePair = featured
+    ? { start: featured.start, end: featured.end }
+    : { start: poll.dateRangeStart, end: poll.dateRangeEnd };
+  const provider = getFlightProvider(env);
+  const stubForCache = env.WHENWEGO_POLL_DO.get(
+    env.WHENWEGO_POLL_DO.idFromName(poll.slug)
+  ) as unknown as DurableObjectStub<WhenWeGoPollDO>;
+  const flightCacheByToken = new Map<string, FlightCachePayload | null>();
+  await Promise.all(
+    poll.participants.map(async (p) => {
+      const key = `flights:${p.token}:${datePair.start}:${datePair.end}:${provider.name}`;
+      try {
+        const raw = await stubForCache.getCached(key);
+        if (!raw) {
+          flightCacheByToken.set(p.token, null);
+          return;
+        }
+        flightCacheByToken.set(p.token, JSON.parse(raw) as FlightCachePayload);
+      } catch {
+        flightCacheByToken.set(p.token, null);
+      }
+    })
+  );
 
   // Phase 9: belt-and-braces — also persist trip_start here. Cron + admin-close
   // already do this, but admin-resend-close-summary calls into us without
@@ -75,7 +144,7 @@ export async function fanOutCloseSummaryEmails(
   }
 
   // Determine the trip date span used in BOTH .ics + calendar-links.
-  const featured = pickRange(overlap);
+  // Reuse the `featured` from above to avoid re-querying overlap.
   const startIso = featured?.start ?? poll.dateRangeStart;
   const endInclusiveIso = featured?.end ?? poll.dateRangeEnd;
   const endExclusiveIso = addDaysIso(endInclusiveIso, 1);
@@ -140,7 +209,9 @@ export async function fanOutCloseSummaryEmails(
       participant,
       profile,
       overlap,
-      flights: [],
+      flights: flightsCacheToEmailShape(
+        flightCacheByToken.get(participant.token) ?? null
+      ),
       hotels: [],
       activities: {},
       participantPageUrl,

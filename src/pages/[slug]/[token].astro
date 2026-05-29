@@ -9,6 +9,7 @@ import PollHeader from '../../components/PollHeader.astro';
 import CalendarGrid from '../../components/CalendarGrid.astro';
 import ProfileForm from '../../components/ProfileForm.astro';
 import EmailButtons from '../../components/EmailButtons.astro';
+import FlightOptions from '../../components/FlightOptions.astro';
 import { buildICalDownloadUrl } from '../../lib/calendar-links';
 
 export const prerender = true;
@@ -100,6 +101,10 @@ const icalDownloadUrl = buildICalDownloadUrl({
         dateRangeEnd={poll.dateRangeEnd}
       />
     </div>
+
+    {/* Phase 5: post-close flight options. JS reveals + populates after
+        /api/flights resolves. Hidden pre-close (calendar-only view). */}
+    <FlightOptions />
 
     <div id="vote-toast" class="vote-toast" role="status" aria-live="polite" hidden></div>
   </main>
@@ -434,7 +439,254 @@ const icalDownloadUrl = buildICalDownloadUrl({
           renderAddToCalendarButtons(overlap);
         }
         setStatus('poll closed');
+        // Phase 5: kick off flights load after the rest of the post-close UI
+        // is in place. Non-blocking — failures degrade gracefully in-component.
+        loadFlights(false);
       }
+    }
+
+    // ─── Phase 5: flight options ─────────────────────────────────────────
+    const flightSection = document.getElementById('flight-options');
+    const flightRefreshBtn = flightSection
+      ? flightSection.querySelector('[data-flights-refresh]')
+      : null;
+    const flightListEl = flightSection
+      ? flightSection.querySelector('[data-flights-list]')
+      : null;
+    const flightRestEl = flightSection
+      ? flightSection.querySelector('[data-flights-rest]')
+      : null;
+    const flightMoreEl = flightSection
+      ? flightSection.querySelector('[data-flights-more]')
+      : null;
+    const flightStateEl = flightSection
+      ? flightSection.querySelector('[data-flights-state]')
+      : null;
+    const flightStateText = flightSection
+      ? flightSection.querySelector('[data-flights-state-text]')
+      : null;
+    const flightGoogleLink = flightSection
+      ? flightSection.querySelector('[data-flights-google-link]')
+      : null;
+    const flightMetaEl = flightSection
+      ? flightSection.querySelector('[data-flights-meta]')
+      : null;
+    const flightDemoBanner = flightSection
+      ? flightSection.querySelector('[data-flights-demo-banner]')
+      : null;
+
+    function formatDurationMin(mins) {
+      if (!mins || mins <= 0) return '';
+      const h = Math.floor(mins / 60);
+      const m = mins % 60;
+      if (h === 0) return m + 'm';
+      if (m === 0) return h + 'h';
+      return h + 'h ' + m + 'm';
+    }
+
+    function fmtFlightTime(iso) {
+      if (!iso) return '';
+      // Amadeus 'local' string e.g. '2026-07-12T07:30:00' — slice the time part.
+      const t = iso.split('T')[1];
+      if (!t) return '';
+      return t.slice(0, 5);
+    }
+
+    function renderFlightCard(f, isCheapest) {
+      const li = document.createElement('li');
+      li.className = 'flight-card' + (isCheapest ? ' is-cheapest' : '');
+      const main = document.createElement('div');
+      main.className = 'flight-card-main';
+      const airlineStrong = document.createElement('strong');
+      airlineStrong.textContent = f.airline + ' (' + f.carrierCode + ')';
+      main.appendChild(airlineStrong);
+      const meta = document.createElement('div');
+      meta.className = 'flight-card-meta';
+      const stopsTxt =
+        f.stops === 0 ? 'Direct' : f.stops + ' stop' + (f.stops > 1 ? 's' : '');
+      const durTxt = formatDurationMin(f.durationMinTotal);
+      const timeTxt =
+        f.departureTimeLocal && f.arrivalTimeLocal
+          ? fmtFlightTime(f.departureTimeLocal) + ' → ' + fmtFlightTime(f.arrivalTimeLocal)
+          : '';
+      meta.textContent = [timeTxt, durTxt, stopsTxt].filter(Boolean).join(' · ');
+      main.appendChild(meta);
+      if (f.bookingHint) {
+        const hint = document.createElement('div');
+        hint.className = 'flight-card-meta';
+        hint.style.marginTop = '4px';
+        hint.textContent = f.bookingHint;
+        main.appendChild(hint);
+      }
+      li.appendChild(main);
+
+      const right = document.createElement('div');
+      const price = document.createElement('div');
+      price.className = 'flight-card-price';
+      price.textContent = '€' + Math.round(f.priceEur);
+      right.appendChild(price);
+      right.appendChild(document.createElement('br'));
+      right.style.textAlign = 'right';
+      li.appendChild(right);
+      return li;
+    }
+
+    function buildGoogleFlightsUrl(originIata, destIata, depart, ret) {
+      const q =
+        'Flights from ' +
+        originIata +
+        ' to ' +
+        destIata +
+        (depart ? ' on ' + depart : '') +
+        (ret ? ' returning ' + ret : '');
+      return 'https://www.google.com/travel/flights?q=' + encodeURIComponent(q);
+    }
+
+    function reasonMessage(reason) {
+      switch (reason) {
+        case 'not_configured':
+          return 'Flight suggestions not configured — ask your organiser to set up a provider.';
+        case 'profile_incomplete':
+          return 'Complete your profile (home airport) to see flight suggestions.';
+        case 'destination_unmapped':
+          return "We couldn't map this destination to an airport — try Google Flights.";
+        case 'no_routes':
+          return 'No flights found for this date pair — try Google Flights for alternatives.';
+        case 'api_down':
+        case 'provider_error':
+          return 'Flight search is temporarily unavailable — please refresh in a few minutes.';
+        default:
+          return '';
+      }
+    }
+
+    function renderFlights(data) {
+      if (!flightSection) return;
+      flightSection.hidden = false;
+      // Always show "Refresh prices" once we've loaded once (even on errors).
+      if (flightRefreshBtn) flightRefreshBtn.disabled = false;
+
+      const flights = (data && data.flights) || [];
+      const reason = data && data.reason;
+      const origin = data && data.origin;
+      const destination = data && data.destination;
+      const dateRange = data && data.dateRange;
+      const provider = data && data.provider;
+
+      // Phase 5: DEMO banner when provider is mock (isReal === false).
+      if (flightDemoBanner) {
+        flightDemoBanner.hidden = !(provider && provider.isReal === false);
+      }
+
+      // Meta line (origin → destination, dates).
+      if (flightMetaEl && origin && destination && origin.iata && destination.iata) {
+        flightMetaEl.textContent =
+          origin.iata +
+          ' → ' +
+          destination.iata +
+          (dateRange && dateRange.start
+            ? ' · ' + dateRange.start + ' to ' + dateRange.end
+            : '');
+        flightMetaEl.hidden = false;
+      }
+
+      // Clear previous render.
+      if (flightListEl) {
+        flightListEl.innerHTML = '';
+        flightListEl.hidden = true;
+      }
+      if (flightRestEl) flightRestEl.innerHTML = '';
+      if (flightMoreEl) flightMoreEl.hidden = true;
+      if (flightStateEl) flightStateEl.hidden = true;
+      if (flightGoogleLink) flightGoogleLink.hidden = true;
+
+      if (reason !== 'ok' || flights.length === 0) {
+        if (flightStateEl && flightStateText) {
+          flightStateText.textContent = reasonMessage(reason || 'no_routes');
+          flightStateEl.hidden = false;
+          // Show Google Flights fallback for the cases where it's actionable.
+          if (
+            origin && destination && origin.iata && destination.iata &&
+            (reason === 'no_routes' || reason === 'destination_unmapped' || reason === 'api_down')
+          ) {
+            if (flightGoogleLink) {
+              flightGoogleLink.href = buildGoogleFlightsUrl(
+                origin.iata,
+                destination.iata,
+                dateRange && dateRange.start,
+                dateRange && dateRange.end
+              );
+              flightGoogleLink.hidden = false;
+            }
+          }
+        }
+        return;
+      }
+
+      // Render up to 3 cheapest, rest goes into the collapsible.
+      const top = flights.slice(0, 3);
+      const rest = flights.slice(3);
+      if (flightListEl) {
+        for (let i = 0; i < top.length; i++) {
+          flightListEl.appendChild(renderFlightCard(top[i], i === 0));
+        }
+        flightListEl.hidden = false;
+      }
+      if (rest.length > 0 && flightRestEl && flightMoreEl) {
+        for (const f of rest) flightRestEl.appendChild(renderFlightCard(f, false));
+        flightMoreEl.hidden = false;
+      }
+    }
+
+    async function loadFlights(forceRefresh) {
+      if (!flightSection) return;
+      flightSection.hidden = false;
+      if (flightRefreshBtn) {
+        flightRefreshBtn.disabled = true;
+        flightRefreshBtn.textContent = forceRefresh ? 'Refreshing…' : 'Loading…';
+      }
+      try {
+        const url =
+          apiBase +
+          (forceRefresh ? '/api/flights/refresh' : '/api/flights') +
+          '?slug=' +
+          encodeURIComponent(slug) +
+          '&token=' +
+          encodeURIComponent(token);
+        const opts = forceRefresh
+          ? { method: 'POST', headers: { 'Content-Type': 'application/json' } }
+          : { headers: { Accept: 'application/json' } };
+        const res = await fetch(url, opts);
+        if (res.status === 429) {
+          // Rate-limited refresh — surface gently.
+          showToast('Refresh available again in ~1 hour', 'err');
+          if (flightRefreshBtn) {
+            flightRefreshBtn.textContent = 'Refresh prices';
+            flightRefreshBtn.disabled = false;
+          }
+          return;
+        }
+        if (!res.ok) {
+          throw new Error('HTTP ' + res.status);
+        }
+        const data = await res.json();
+        renderFlights(data);
+      } catch (err) {
+        if (flightStateEl && flightStateText) {
+          flightStateText.textContent =
+            'Could not load flights right now — try refreshing the page.';
+          flightStateEl.hidden = false;
+        }
+      } finally {
+        if (flightRefreshBtn) {
+          flightRefreshBtn.textContent = 'Refresh prices';
+          flightRefreshBtn.disabled = false;
+        }
+      }
+    }
+
+    if (flightRefreshBtn) {
+      flightRefreshBtn.addEventListener('click', () => loadFlights(true));
     }
 
     // Phase 8: build add-to-calendar URLs from the featured trip range and

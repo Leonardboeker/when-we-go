@@ -137,6 +137,30 @@ const publicApiBase =
       </table>
     </section>
 
+    {/* Phase 5: per-participant flights summary. Hidden until /api/admin/flights
+        resolves. Shows DEMO banner when the wired provider isn't real. */}
+    <section class="admin-section" aria-label="Flights summary" data-admin-flights-section hidden>
+      <div class="admin-section-head">
+        <h2>Flights per participant</h2>
+        <span class="admin-section-hint" data-admin-flights-hint>—</span>
+      </div>
+      <div class="admin-card" data-admin-flights-demo hidden style="margin-bottom:12px;padding:10px 12px;background:repeating-linear-gradient(45deg,#fff7d6,#fff7d6 8px,#ffeaa0 8px,#ffeaa0 16px);border:2px solid #1c1b1f;font-size:13px;">
+        <strong>📍 DEMO flight data</strong> — real provider not configured.
+      </div>
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th scope="col">Participant</th>
+            <th scope="col">From → To</th>
+            <th scope="col">Status</th>
+            <th scope="col">Cheapest</th>
+            <th scope="col">Offers</th>
+          </tr>
+        </thead>
+        <tbody data-admin-flights-tbody></tbody>
+      </table>
+    </section>
+
     <CostSplitPanel
       slug={poll.slug}
       organizerToken={poll.organizerToken}
@@ -293,8 +317,55 @@ const publicApiBase =
           if (!res.ok) throw new Error('HTTP ' + res.status);
           const data = await res.json();
           render(data);
+          // Phase 5: pull flight summaries once we know the poll is closed.
+          if (data.closed) fetchAdminFlights();
         } catch (err) {
           if (footEl) footEl.textContent = 'Refresh failed: ' + (err && err.message);
+        }
+      }
+
+      // Phase 5 — fetch per-participant flight summary + render table.
+      async function fetchAdminFlights() {
+        const section = document.querySelector('[data-admin-flights-section]');
+        const tbody = document.querySelector('[data-admin-flights-tbody]');
+        const hint = document.querySelector('[data-admin-flights-hint]');
+        const demo = document.querySelector('[data-admin-flights-demo]');
+        if (!section || !tbody) return;
+        try {
+          const res = await fetch(
+            apiBase + '/api/admin/flights?slug=' + encodeURIComponent(slug),
+            { headers: { 'X-Organizer-Token': organizerToken, Accept: 'application/json' } }
+          );
+          if (!res.ok) return;
+          const data = await res.json();
+          section.hidden = false;
+          if (demo) demo.hidden = !(data.provider && data.provider.isReal === false);
+          if (hint) {
+            hint.textContent = data.provider
+              ? 'provider: ' + data.provider.name
+              : '';
+          }
+          tbody.innerHTML = '';
+          for (const p of data.participants || []) {
+            const tr = document.createElement('tr');
+            const fromTo =
+              p.origin && p.destination
+                ? p.origin.iata + ' → ' + p.destination.iata
+                : '—';
+            const cheapest =
+              p.cheapestEur !== null && p.cheapestEur !== undefined
+                ? '€' + p.cheapestEur + (p.cheapestCarrier ? ' (' + p.cheapestCarrier + ')' : '')
+                : '—';
+            tr.innerHTML =
+              '<td>' + p.name + '</td>' +
+              '<td>' + fromTo + '</td>' +
+              '<td>' + p.reason + '</td>' +
+              '<td>' + cheapest + '</td>' +
+              '<td>' + (p.totalOffers || 0) + '</td>';
+            tbody.appendChild(tr);
+          }
+        } catch (_err) {
+          // Graceful failure — admin section stays hidden.
         }
       }
 

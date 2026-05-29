@@ -14,6 +14,7 @@ import { computeOverlap, type VoteRow } from '../lib/overlap';
 import { notifyPollClose } from '../lib/notify-pipeline';
 import { fanOutCloseSummaryEmails } from '../lib/close-email-fanout';
 import { computeTripStart } from '../lib/trip-date';
+import { loadFlightsForParticipant } from './flights';
 
 export async function handleAdminClose(
   req: Request,
@@ -74,6 +75,20 @@ export async function handleAdminClose(
       console.error('[notify] pollClose rejected', err);
     })
   );
+
+  // Phase 5: pre-fetch flights in parallel before the email fan-out so the
+  // FLIGHTS section can populate. Safe-by-default: when Amadeus keys are
+  // unset, loadFlightsForParticipant returns reason: 'not_configured'
+  // synchronously without a network call.
+  try {
+    await Promise.allSettled(
+      poll.participants.map((p) =>
+        loadFlightsForParticipant({ env, poll, token: p.token })
+      )
+    );
+  } catch (err) {
+    console.error('[admin-close] flights pre-fetch failed', err);
+  }
 
   // Phase 8: fan out per-participant close-summary emails (fire-and-forget).
   // sendEmail() silently skips when WHENWEGO_RESEND_API_KEY is unset, so this
