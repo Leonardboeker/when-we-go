@@ -9,9 +9,10 @@ compatibility_date = "2024-09-23"
 # Comment this block out if you only want the worker on its *.workers.dev URL.
 # zone_name MUST be a domain you own and that's configured in Cloudflare DNS.
 # ────────────────────────────────────────────────────────────────────────────
-[[routes]]
-pattern = "when.YOUR_DOMAIN.com/api/*"
-zone_name = "YOUR_DOMAIN.com"
+# [[routes]]
+# pattern = "when.YOUR_DOMAIN.com/api/*"
+# zone_name = "YOUR_DOMAIN.com"
+# Uncomment and fill in your domain once you have one configured in Cloudflare DNS.
 
 # ────────────────────────────────────────────────────────────────────────────
 # Durable Object binding — one DO instance per poll (keyed by slug).
@@ -40,7 +41,7 @@ WHENWEGO_PHASE = "13"
 # Default absolute site URL used to build links inside outbound emails.
 # In production, override via `wrangler secret put WHENWEGO_SITE_URL` with the
 # real domain (e.g. https://when.your-domain.com). Local dev default below.
-WHENWEGO_SITE_URL = "http://localhost:4321"
+WHENWEGO_SITE_URL = "https://when-we-go-demo.pages.dev"
 
 # ────────────────────────────────────────────────────────────────────────────
 # Secrets — set via: npx wrangler secret put <NAME>
