@@ -22,6 +22,7 @@ import {
   renderCloseSummaryEmail,
   type FlightOption as EmailFlightOption,
   type HotelOption as EmailHotelOption,
+  type ActivitiesBucket,
 } from './email-templates';
 import { sendEmail } from './notify-pipeline';
 import { computeTripStart } from './trip-date';
@@ -31,6 +32,8 @@ import { getFlightProvider } from './flight-provider';
 import { getHotelProvider } from './hotel-provider';
 import type { HotelCachePayload } from './hotels';
 import { hotelCacheKey } from './hotels';
+import type { ActivityCachePayload } from './activities';
+import { loadActivitiesForPoll } from '../handlers/activities';
 
 export interface FanOutInput {
   env: Env;
@@ -142,6 +145,25 @@ function buildBookingSearchUrl(args: {
   return `https://www.booking.com/searchresults.html?${params.toString()}`;
 }
 
+/**
+ * Phase 7 — convert our Claude/mock activity cache into the email's
+ * ActivitiesBucket shape. Email template renders thisWeek + alwaysGreat with
+ * optional note (we use whyOneSentence). Empty bucket → email omits section.
+ */
+function activitiesCacheToEmailShape(
+  cache: ActivityCachePayload | null
+): ActivitiesBucket {
+  if (!cache || cache.reason !== 'ok') return {};
+  const map = (it: ActivityCachePayload['activities']['thisWeek'][number]) => ({
+    name: it.name,
+    note: it.whyOneSentence,
+  });
+  return {
+    thisWeek: (cache.activities.thisWeek ?? []).map(map),
+    alwaysGreat: (cache.activities.alwaysGreat ?? []).map(map),
+  };
+}
+
 export async function fanOutCloseSummaryEmails(
   args: FanOutInput
 ): Promise<FanOutResult> {
@@ -196,6 +218,18 @@ export async function fanOutCloseSummaryEmails(
     hotelCache = null;
   }
   const sharedHotels = hotelsCacheToEmailShape(hotelCache);
+
+  // Phase 7 — pre-fetch the shared activity list once (same for everyone).
+  // Cache TTL is 7d so this is usually a cache hit. Failures here are
+  // non-fatal — email still goes out with the activities section omitted.
+  let activityCache: ActivityCachePayload | null = null;
+  try {
+    activityCache = await loadActivitiesForPoll({ env, poll });
+  } catch (err) {
+    console.error(`[fanout] activities load failed for ${poll.slug}`, err);
+    activityCache = null;
+  }
+  const sharedActivities = activitiesCacheToEmailShape(activityCache);
 
   // Phase 9: belt-and-braces — also persist trip_start here. Cron + admin-close
   // already do this, but admin-resend-close-summary calls into us without
@@ -284,7 +318,7 @@ export async function fanOutCloseSummaryEmails(
         flightCacheByToken.get(participant.token) ?? null
       ),
       hotels: sharedHotels,
-      activities: {},
+      activities: sharedActivities,
       participantPageUrl,
       icalUrl,
       addToCalendarLinks,

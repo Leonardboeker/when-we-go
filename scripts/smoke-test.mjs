@@ -920,6 +920,117 @@ if (PARTICIPANTS.length === 0) {
   }
 }
 
+// (11) Phase 7 — activities (PROVIDER-ABSTRACTED; real Claude when key set)
+console.log('\n(11) Activities flow (Claude structured-output, real provider expected):');
+const VALID_ACTIVITY_REASONS = new Set([
+  'ok',
+  'destination_too_obscure',
+  'not_configured',
+  'provider_error',
+]);
+if (PARTICIPANTS.length === 0) {
+  await check('GET /api/activities', async () => ({ skip: 'no SMOKE_TOKENS' }));
+} else {
+  const me = PARTICIPANTS[0];
+  let firstFetchedAt = 0;
+
+  await check('GET /api/activities -> 200 + { reason:"ok", provider.isReal:true, alwaysGreat>=3, Copenhagen-themed }', async () => {
+    const { status, json } = await fetchJson(
+      `${BASE}/api/activities?slug=${encodeURIComponent(SLUG)}&token=${encodeURIComponent(me.token)}`
+    );
+    if (status !== 200) return `status ${status} body=${JSON.stringify(json)}`;
+    if (!json) return 'no JSON body';
+    if (!json.activities || !Array.isArray(json.activities.thisWeek) || !Array.isArray(json.activities.alwaysGreat)) {
+      return `activities shape wrong: ${JSON.stringify(json.activities)}`;
+    }
+    if (!VALID_ACTIVITY_REASONS.has(json.reason)) return `invalid reason "${json.reason}"`;
+    if (typeof json.fetchedAt !== 'number') return `fetchedAt not number: ${json.fetchedAt}`;
+    if (!json.provider || typeof json.provider.name !== 'string') return 'provider missing';
+    // Real Claude integration check (key is in .dev.vars):
+    if (json.provider.isReal !== true) {
+      return `provider.isReal=${json.provider.isReal} expected true (Claude key in .dev.vars) — Claude integration failed`;
+    }
+    if (json.provider.name !== 'claude') {
+      return `provider.name=${json.provider.name} expected 'claude'`;
+    }
+    if (json.reason !== 'ok') {
+      return `reason=${json.reason} expected 'ok' — Claude returned empty list`;
+    }
+    if (json.activities.alwaysGreat.length < 3) {
+      return `alwaysGreat.length=${json.activities.alwaysGreat.length} expected >=3 — Claude under-delivered`;
+    }
+    // Copenhagen-specific sanity check — at least one alwaysGreat item should
+    // mention a canonical Copenhagen landmark or food name.
+    const cphHints = /(tivoli|nyhavn|christiania|louisiana|str[øo]get|sm[øo]rrebr[øo]d|rosenborg|amalienborg|copenhagen|københavn|noma|c.bar|frederiksborg|m.olcafe|carlsberg)/i;
+    const allText = [...json.activities.alwaysGreat, ...json.activities.thisWeek]
+      .map((a) => `${a.name} ${a.whyOneSentence}`)
+      .join(' | ');
+    if (!cphHints.test(allText)) {
+      return `no Copenhagen-specific landmark mentioned in Claude's response — sample names: ${json.activities.alwaysGreat.slice(0, 3).map((a) => a.name).join(', ')}`;
+    }
+    // Source attribution check
+    for (const a of [...json.activities.alwaysGreat, ...json.activities.thisWeek]) {
+      if (a.source !== 'claude') return `activity source=${a.source} expected 'claude'`;
+    }
+    firstFetchedAt = json.fetchedAt;
+    console.log(`        [info] activities reason=${json.reason} thisWeek=${json.activities.thisWeek.length} alwaysGreat=${json.activities.alwaysGreat.length} provider=${json.provider.name}`);
+    console.log(`        [info] first 2 alwaysGreat (Copenhagen): ${JSON.stringify(json.activities.alwaysGreat.slice(0, 2).map((a) => ({ name: a.name, type: a.type, confidence: a.confidence })))}`);
+    return true;
+  });
+
+  await check('GET /api/activities again -> identical fetchedAt (cache hit)', async () => {
+    const { status, json } = await fetchJson(
+      `${BASE}/api/activities?slug=${encodeURIComponent(SLUG)}&token=${encodeURIComponent(me.token)}`
+    );
+    if (status !== 200) return `status ${status}`;
+    if (json.fetchedAt !== firstFetchedAt) {
+      return `fetchedAt changed (${firstFetchedAt} → ${json.fetchedAt}) — cache not hit`;
+    }
+    return true;
+  });
+
+  await check('GET /api/activities with wrong token -> 404', async () => {
+    const { status } = await fetchJson(
+      `${BASE}/api/activities?slug=${encodeURIComponent(SLUG)}&token=NEVER_VALID_TOKEN_zzz`
+    );
+    if (status !== 404) return `status ${status} expected 404`;
+    return true;
+  });
+
+  if (!ORG_TOKEN) {
+    await check('POST /api/activities/refresh', async () => ({ skip: 'no SMOKE_ORGANIZER_TOKEN' }));
+  } else {
+    await check('POST /api/activities/refresh -> 200|429 + valid shape', async () => {
+      const { status, json } = await fetchJson(
+        `${BASE}/api/activities/refresh?slug=${encodeURIComponent(SLUG)}`,
+        { method: 'POST', headers: { 'X-Organizer-Token': ORG_TOKEN } }
+      );
+      if (status !== 200 && status !== 429) {
+        return `status ${status} body=${JSON.stringify(json)}`;
+      }
+      if (status === 200) {
+        if (!json || json.ok !== true) return 'ok flag missing';
+        if (!json.activities) return 'activities missing on refresh';
+        if (!VALID_ACTIVITY_REASONS.has(json.reason)) return `invalid reason "${json.reason}"`;
+        if (!json.provider) return 'provider missing on refresh';
+        console.log(`        [info] refresh result: reason=${json.reason} provider=${json.provider.name} fetchedAt=${json.fetchedAt}`);
+      } else {
+        if (typeof json.retryAfterMs !== 'number') return 'retryAfterMs not number on 429';
+      }
+      return true;
+    });
+
+    await check('POST /api/activities/refresh with WRONG org -> 404', async () => {
+      const { status } = await fetchJson(
+        `${BASE}/api/activities/refresh?slug=${encodeURIComponent(SLUG)}`,
+        { method: 'POST', headers: { 'X-Organizer-Token': 'wrong-org-token-NEVER-valid' } }
+      );
+      if (status !== 404) return `status ${status} expected 404`;
+      return true;
+    });
+  }
+}
+
 const elapsed = ((Date.now() - started) / 1000).toFixed(2);
 console.log('\n' + '-'.repeat(60));
 console.log(`[smoke] ${pass} passed, ${fail} failed, ${skipped} skipped (${elapsed}s)`);

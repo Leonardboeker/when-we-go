@@ -47,6 +47,8 @@ import { handleHotels } from './handlers/hotels';
 import { handleHotelsRefresh } from './handlers/hotels-refresh';
 import { handleHotelVote } from './handlers/hotel-vote';
 import { handleAdminHotelChoose } from './handlers/admin-hotel-choose';
+import { handleActivities } from './handlers/activities';
+import { handleActivitiesRefresh } from './handlers/activities-refresh';
 import { handleScheduled } from './scheduled';
 
 export { WhenWeGoPollDO };
@@ -55,8 +57,8 @@ const router = new Router();
 
 router.get('/api/health', (req, _env, _ctx) => {
   const env = _env as Env;
-  // Phase number reflects total shipped phases (Phase 5/6 land AFTER 10).
-  return jsonResponse({ ok: true, phase: 12 }, { status: 200 }, req, env);
+  // Phase number reflects total shipped phases (Phase 5/6/7 land AFTER 10).
+  return jsonResponse({ ok: true, phase: 13 }, { status: 200 }, req, env);
 });
 
 router.get('/api/poll', (req, env, ctx) =>
@@ -123,6 +125,14 @@ router.post('/api/hotel-vote', (req, env, ctx) =>
 );
 router.post('/api/admin/hotel-choose', (req, env, ctx) =>
   handleAdminHotelChoose(req, env as Env, ctx)
+);
+// Phase 7 — activities (Anthropic Claude structured-output via tools API).
+// Cache TTL 7 days; refresh 1/day per slug. Mock fallback when key unset.
+router.get('/api/activities', (req, env, ctx) =>
+  handleActivities(req, env as Env, ctx)
+);
+router.post('/api/activities/refresh', (req, env, ctx) =>
+  handleActivitiesRefresh(req, env as Env, ctx)
 );
 
 export default {

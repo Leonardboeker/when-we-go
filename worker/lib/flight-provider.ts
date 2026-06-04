@@ -81,11 +81,12 @@ export interface FlightProvider {
  * the file dependency-graph forward-compatible.
  */
 import { MockFlightProvider } from './flight-provider-mock.ts';
+import { KiwiFlightProvider } from './flight-provider-kiwi.ts';
 
-export function getFlightProvider(_env: Env): FlightProvider {
+export function getFlightProvider(env: Env): FlightProvider {
+  if (env.WHENWEGO_KIWI_API_KEY) return new KiwiFlightProvider(env.WHENWEGO_KIWI_API_KEY);
   // Future:
-  //   if (_env.WHENWEGO_KIWI_API_KEY) return new KiwiFlightProvider(_env);
-  //   if (_env.WHENWEGO_SKYSCANNER_API_KEY) return new SkyscannerFlightProvider(_env);
-  //   if (_env.WHENWEGO_DUFFEL_API_KEY) return new DuffelFlightProvider(_env);
+  //   if (env.WHENWEGO_SKYSCANNER_API_KEY) return new SkyscannerFlightProvider(env);
+  //   if (env.WHENWEGO_DUFFEL_API_KEY) return new DuffelFlightProvider(env);
   return new MockFlightProvider();
 }

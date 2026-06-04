@@ -1,6 +1,6 @@
 # Roadmap
 
-> Master phase list. MVP (Phases 1-3) shipped. Phases 4-10 = "the actually-useful trip planner" — see [`VISION.md`](./VISION.md) for the full picture and architecture.
+> Master phase list. All 10 phases shipped. Full trip planner complete. — see [`VISION.md`](./VISION.md) for the full picture and architecture.
 > Per-phase implementation details live in `phases/NN-<name>/NN-CONTEXT.md` written just-in-time.
 
 ## Phase status overview
@@ -10,13 +10,13 @@
 | 1 | Foundation | Astro skeleton, token model, static pages | ✅ done | — | — |
 | 2 | Date Polling + Auto-Close | Worker + DO + interactive grid + cron | ✅ done | — | 1 |
 | 3 | Polish + Public Release | README, banner, OG images, demo, public flip | ✅ done | — | 2 |
-| 4 | Participant Profile | Collect email + home airport + budget + interests | ⏳ planned | 1 day | 2 |
-| 5 | Flight Search | Amadeus integration, per-participant flight options | ⏳ planned | 2 days | 4 |
-| 6 | Hotel Search | Amadeus shared hotel shortlist for destination | ⏳ planned | 1 day | 5 |
-| 7 | Activity Suggestions | Claude API curated activities for the date window | ⏳ planned | 1 day | 2 |
-| 8 | Email + iCal Close-Summary | Resend integration, per-participant proposal email, .ics calendar invite, add-to-Google/Apple/Outlook | ⏳ planned | 2 days | 5, 6, 7 |
-| 9 | Reminder Schedule | Cron-driven T-30 / T-7 / T-1 / T+1 reminder emails | ⏳ planned | 1 day | 8 |
-| 10 | pay-me-back Integration | One-click spawn matching debt-collection instance | ⏳ planned | 2 days | 9 |
+| 4 | Participant Profile | Collect email + home airport + budget + interests | ✅ done | 1 day | 2 |
+| 5 | Flight Search | Kiwi.com Tequila (real) + Mock provider fallback | ✅ done | 2 days | 4 |
+| 6 | Hotel Search | Provider-abstracted shared hotel shortlist | ✅ done | 1 day | 5 |
+| 7 | Activity Suggestions | Claude Haiku via tools API + Mock fallback | ✅ done | 1 day | 2 |
+| 8 | Email + iCal Close-Summary | Resend + RFC 5545 .ics + add-to-calendar links | ✅ done | 2 days | 5, 6, 7 |
+| 9 | Reminder Schedule | Cron T-30/T-7/T-1/T+1 with idempotency | ✅ done | 1 day | 8 |
+| 10 | pay-me-back Integration | Cost split export + one-click pay-me-back JSON | ✅ done | 2 days | 9 |
 | 11 | (Future) Booking deep-links | Direct links to Booking.com / Airbnb prefilled with dates | future | — | 6 |
 | 12 | (Future) Conversational refinement | "show me cheaper flights" — multi-turn LLM | future | — | 7 |
 

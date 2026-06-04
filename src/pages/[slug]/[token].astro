@@ -11,6 +11,7 @@ import ProfileForm from '../../components/ProfileForm.astro';
 import EmailButtons from '../../components/EmailButtons.astro';
 import FlightOptions from '../../components/FlightOptions.astro';
 import HotelShortlist from '../../components/HotelShortlist.astro';
+import ActivitiesList from '../../components/ActivitiesList.astro';
 import { buildICalDownloadUrl } from '../../lib/calendar-links';
 
 export const prerender = true;
@@ -110,6 +111,10 @@ const icalDownloadUrl = buildICalDownloadUrl({
     {/* Phase 6: shared hotel shortlist. Same gating as FlightOptions —
         revealed once /api/hotels resolves post-close. */}
     <HotelShortlist mode="participant" />
+
+    {/* Phase 7: Claude-curated activity suggestions. Same gating —
+        revealed post-close once /api/activities resolves. */}
+    <ActivitiesList />
 
     <div id="vote-toast" class="vote-toast" role="status" aria-live="polite" hidden></div>
   </main>
@@ -449,6 +454,8 @@ const icalDownloadUrl = buildICalDownloadUrl({
         loadFlights(false);
         // Phase 6: shared hotel shortlist — same non-blocking pattern.
         loadHotels();
+        // Phase 7: Claude-curated activity suggestions — non-blocking.
+        loadActivities();
       }
     }
 
@@ -894,6 +901,169 @@ const icalDownloadUrl = buildICalDownloadUrl({
         loadHotels();
       } catch (err) {
         showToast('Vote failed', 'err');
+      }
+    }
+
+    // ─── Phase 7: activities (Claude-curated) ────────────────────────────
+    const activitiesSection = document.getElementById('activities-list');
+    const activitiesDemoBanner = activitiesSection
+      ? activitiesSection.querySelector('[data-activities-demo-banner]')
+      : null;
+    const activitiesMetaEl = activitiesSection
+      ? activitiesSection.querySelector('[data-activities-meta]')
+      : null;
+    const activitiesStateEl = activitiesSection
+      ? activitiesSection.querySelector('[data-activities-state]')
+      : null;
+    const activitiesStateText = activitiesSection
+      ? activitiesSection.querySelector('[data-activities-state-text]')
+      : null;
+    const thisWeekSection = activitiesSection
+      ? activitiesSection.querySelector('[data-activities-thisweek-section]')
+      : null;
+    const thisWeekListEl = activitiesSection
+      ? activitiesSection.querySelector('[data-activities-thisweek]')
+      : null;
+    const alwaysGreatSection = activitiesSection
+      ? activitiesSection.querySelector('[data-activities-alwaysgreat-section]')
+      : null;
+    const alwaysGreatListEl = activitiesSection
+      ? activitiesSection.querySelector('[data-activities-alwaysgreat]')
+      : null;
+
+    const ACTIVITY_ICONS = {
+      concert: '🎵',
+      festival: '🎉',
+      museum: '🏛️',
+      food: '🍽️',
+      outdoors: '🌳',
+      history: '🏰',
+      neighborhood: '🏘️',
+      event: '🎭',
+      other: '🔮',
+    };
+
+    function renderActivityCard(item) {
+      const li = document.createElement('li');
+      li.className = 'activity-card';
+      if (item.confidence === 'medium') li.classList.add('is-medium');
+      else if (item.confidence === 'low') li.classList.add('is-low');
+
+      const icon = document.createElement('div');
+      icon.className = 'activity-card-icon';
+      icon.textContent = ACTIVITY_ICONS[item.type] || ACTIVITY_ICONS.other;
+      li.appendChild(icon);
+
+      const body = document.createElement('div');
+      body.className = 'activity-card-body';
+      const name = document.createElement('p');
+      name.className = 'activity-card-name';
+      name.textContent = item.name;
+      body.appendChild(name);
+      const why = document.createElement('p');
+      why.className = 'activity-card-why';
+      why.textContent = item.whyOneSentence;
+      body.appendChild(why);
+      const meta = document.createElement('p');
+      meta.className = 'activity-card-meta';
+      meta.textContent = item.dateRange;
+      body.appendChild(meta);
+      if (item.confidence === 'medium') {
+        const badge = document.createElement('span');
+        badge.className = 'activity-confidence-badge is-medium';
+        badge.textContent = 'ℹ verify dates';
+        body.appendChild(badge);
+      } else if (item.confidence === 'low') {
+        const badge = document.createElement('span');
+        badge.className = 'activity-confidence-badge is-low';
+        badge.textContent = '⚠ check current schedule';
+        body.appendChild(badge);
+      }
+      li.appendChild(body);
+
+      const right = document.createElement('div');
+      right.className = 'activity-card-right';
+      if (item.paid && typeof item.priceEur === 'number') {
+        const priceEl = document.createElement('div');
+        priceEl.className = 'activity-card-price';
+        priceEl.textContent = '€' + item.priceEur;
+        right.appendChild(priceEl);
+      } else if (item.paid) {
+        right.textContent = 'paid';
+      } else {
+        right.textContent = 'free';
+      }
+      li.appendChild(right);
+      return li;
+    }
+
+    function renderActivities(data) {
+      if (!activitiesSection) return;
+      activitiesSection.hidden = false;
+      const activities = (data && data.activities) || { thisWeek: [], alwaysGreat: [] };
+      const reason = data && data.reason;
+      const provider = data && data.provider;
+      const destination = data && data.destination;
+
+      if (activitiesDemoBanner) {
+        activitiesDemoBanner.hidden = !(provider && provider.isReal === false);
+      }
+      if (activitiesMetaEl && destination) {
+        activitiesMetaEl.textContent = destination;
+        activitiesMetaEl.hidden = false;
+      }
+      if (thisWeekListEl) thisWeekListEl.innerHTML = '';
+      if (alwaysGreatListEl) alwaysGreatListEl.innerHTML = '';
+      if (thisWeekSection) thisWeekSection.hidden = true;
+      if (alwaysGreatSection) alwaysGreatSection.hidden = true;
+      if (activitiesStateEl) activitiesStateEl.hidden = true;
+
+      const total = (activities.thisWeek || []).length + (activities.alwaysGreat || []).length;
+      if (reason !== 'ok' || total === 0) {
+        if (activitiesStateEl && activitiesStateText) {
+          activitiesStateText.textContent =
+            reason === 'destination_too_obscure'
+              ? "We couldn't find specific activity suggestions for this destination — try TripAdvisor or your favourite travel guide."
+              : 'Activity suggestions are temporarily unavailable — refresh in a few minutes.';
+          activitiesStateEl.hidden = false;
+        }
+        return;
+      }
+
+      if ((activities.thisWeek || []).length > 0 && thisWeekListEl && thisWeekSection) {
+        for (const item of activities.thisWeek) {
+          thisWeekListEl.appendChild(renderActivityCard(item));
+        }
+        thisWeekSection.hidden = false;
+      }
+      if ((activities.alwaysGreat || []).length > 0 && alwaysGreatListEl && alwaysGreatSection) {
+        for (const item of activities.alwaysGreat) {
+          alwaysGreatListEl.appendChild(renderActivityCard(item));
+        }
+        alwaysGreatSection.hidden = false;
+      }
+    }
+
+    async function loadActivities() {
+      if (!activitiesSection) return;
+      try {
+        const url =
+          apiBase +
+          '/api/activities?slug=' +
+          encodeURIComponent(slug) +
+          '&token=' +
+          encodeURIComponent(token);
+        const res = await fetch(url, { headers: { Accept: 'application/json' } });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        renderActivities(data);
+      } catch (err) {
+        if (activitiesStateEl && activitiesStateText) {
+          activitiesStateText.textContent =
+            'Could not load activities right now — try refreshing the page.';
+          activitiesStateEl.hidden = false;
+          activitiesSection.hidden = false;
+        }
       }
     }
 
