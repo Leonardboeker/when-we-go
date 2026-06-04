@@ -109,6 +109,10 @@ const publicApiBase =
           <button type="button" class="admin-button admin-button-danger" data-admin-close>
             Force close
           </button>
+          {/* #8 — reopen a closed poll for N more days (hidden until closed) */}
+          <button type="button" class="admin-button" data-admin-reopen hidden>
+            Wieder öffnen (+7 Tage)
+          </button>
         </div>
       </div>
       <p class="admin-profiles-summary" data-admin-profiles-summary>
@@ -198,6 +202,7 @@ const publicApiBase =
       const votersEl = document.querySelector('[data-admin-voters]');
       const refreshBtn = document.querySelector('[data-admin-refresh]');
       const closeBtn = document.querySelector('[data-admin-close]');
+      const reopenBtn = document.querySelector('[data-admin-reopen]');
       const footEl = document.querySelector('[data-admin-foot]');
 
       /** @param {number|null} ts */
@@ -216,7 +221,8 @@ const publicApiBase =
       function render(data) {
         isClosed = !!data.closed;
         if (statusEl) {
-          statusEl.textContent = isClosed ? 'Closed' : statusEl.textContent;
+          // #8 — reflect live state (reopen flips Closed → Offen).
+          statusEl.textContent = isClosed ? 'Closed' : 'Offen';
         }
         // Phase 10: reveal the CostSplitPanel once we know the poll is closed.
         // Dataset flag covers race where the panel script runs after this fire.
@@ -311,6 +317,8 @@ const publicApiBase =
             : 'Auto-refreshes every 30 seconds.';
         }
         if (closeBtn) closeBtn.disabled = isClosed;
+        // #8 — reopen only makes sense once the poll is closed.
+        if (reopenBtn) reopenBtn.hidden = !isClosed;
       }
 
       async function fetchOnce() {
@@ -639,6 +647,27 @@ const publicApiBase =
             stopPolling();
           } catch (err) {
             alert('Close failed: ' + (err && err.message));
+          }
+        });
+      }
+      // #8 — reopen a closed poll for 7 more days.
+      if (reopenBtn) {
+        reopenBtn.addEventListener('click', async () => {
+          if (!confirm('Abstimmung für 7 weitere Tage öffnen? Schließen-Ergebnisse (Übersicht) werden zurückgesetzt.')) return;
+          reopenBtn.disabled = true;
+          try {
+            const url = apiBase + '/api/admin/reopen?slug=' + encodeURIComponent(slug) + '&days=7';
+            const res = await fetch(url, {
+              method: 'POST',
+              headers: { 'X-Organizer-Token': organizerToken, Accept: 'application/json' },
+            });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            await fetchOnce();
+            startPolling();
+          } catch (err) {
+            alert('Wieder öffnen fehlgeschlagen: ' + (err && err.message));
+          } finally {
+            reopenBtn.disabled = false;
           }
         });
       }

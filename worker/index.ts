@@ -33,6 +33,7 @@ import { handlePoll } from './handlers/poll';
 import { handleProfile } from './handlers/profile';
 import { handleAdminPoll } from './handlers/admin-poll';
 import { handleAdminClose } from './handlers/admin-close';
+import { handleAdminReopen } from './handlers/admin-reopen';
 import { handleIcal, handlePublicIcal } from './handlers/ical';
 import { handleAdminResendSummary } from './handlers/admin-resend-summary';
 import { handleAdminReminderStatus } from './handlers/admin-reminders';
@@ -75,6 +76,9 @@ router.get('/api/admin/poll', (req, env, ctx) =>
 );
 router.post('/api/admin/close', (req, env, ctx) =>
   handleAdminClose(req, env as Env, ctx)
+);
+router.post('/api/admin/reopen', (req, env, ctx) =>
+  handleAdminReopen(req, env as Env, ctx)
 );
 router.get('/api/ical', (req, env, ctx) =>
   handleIcal(req, env as Env, ctx)

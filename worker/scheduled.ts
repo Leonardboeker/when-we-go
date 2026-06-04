@@ -49,7 +49,6 @@ export async function handleScheduled(
         console.error(`[cron] poll ${poll.slug} has invalid pollCloseAt`);
         continue;
       }
-      if (now < closeAtMs) continue; // not yet due
 
       const stub = env.WHENWEGO_POLL_DO.get(
         env.WHENWEGO_POLL_DO.idFromName(poll.slug)
@@ -57,6 +56,11 @@ export async function handleScheduled(
 
       const alreadyClosed = await stub.isClosed();
       if (alreadyClosed) continue;
+
+      // #8: a reopen override (future close) wins over the configured pollCloseAt.
+      const override = await stub.getCloseOverride();
+      const effectiveCloseMs = override ?? closeAtMs;
+      if (now < effectiveCloseMs) continue; // not yet due
 
       const allVotes = (await stub.getAllVotes()) as VoteRecord[];
       const overlap = computeOverlap(

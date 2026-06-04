@@ -281,6 +281,28 @@ export class WhenWeGoPollDO extends DurableObject {
     return this.getMeta('closed_at') !== null;
   }
 
+  // #8 — Reopen a closed poll. Clears all close-derived state so voting resumes,
+  // and records a future close override (ISO ms) so the hourly cron won't
+  // immediately re-close it (the configured pollCloseAt is in the past). Also
+  // wipes reminders so the new cycle can re-fire. Idempotent.
+  reopen(newCloseAtMs: number): { newCloseAt: number } {
+    for (const key of ['closed_at', 'overlap_cache', 'trip_start', 'close_notified_at']) {
+      this.sql.exec(`DELETE FROM poll_meta WHERE key = ?`, key);
+    }
+    this.sql.exec(`DELETE FROM reminders_sent`);
+    this.setMeta('close_at_override', String(newCloseAtMs));
+    return { newCloseAt: newCloseAtMs };
+  }
+
+  // #8 — Effective close timestamp: a reopen override wins over the configured
+  // pollCloseAt. Returns null when no override is set (caller uses pollCloseAt).
+  getCloseOverride(): number | null {
+    const raw = this.getMeta('close_at_override');
+    if (!raw) return null;
+    const n = parseInt(raw as string, 10);
+    return Number.isFinite(n) ? n : null;
+  }
+
   // ─── Phase 4: participant profile ───────────────────────────────────
   // Upsert semantics — INSERT OR REPLACE so the caller doesn't need to know
   // whether a row already exists. `interests` is JSON-stringified for storage;
