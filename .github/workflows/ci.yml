@@ -1,0 +1,46 @@
+# .github/workflows/ci.yml
+# #10 — CI quality gate. Runs on every push + PR. Catches the class of bug that
+# shipped a broken live site before (smart quotes in an is:inline script that
+# the build does not syntax-check) plus build breaks, cross-poll data leaks and
+# overlap regressions — BEFORE they deploy.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Provide build-time poll data
+        # data/polls.json is gitignored; the prebuild materialises it from this
+        # env var (same mechanism as Cloudflare Pages). Example data is enough
+        # to exercise the full static build + every check below.
+        run: cp data/polls.example.json data/polls.json
+
+      - name: Build (static site + Worker types)
+        run: npm run build
+
+      - name: Inline-script syntax gate
+        # Parses every inline <script> in dist/ — would have caught the
+        # smart-quote regression that broke the whole voting IIFE.
+        run: npm run check:inline
+
+      - name: Cross-poll isolation
+        run: npm run verify-isolation
+
+      - name: Overlap unit tests
+        run: npm run test:overlap
