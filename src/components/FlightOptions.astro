@@ -43,6 +43,13 @@
 
   <p class="flight-options-meta" data-flights-meta hidden></p>
 
+  {/* Feature 2: loading skeleton — shown while fetching, hidden on render. */}
+  <div class="skeleton-list" data-flights-skeleton hidden aria-hidden="true">
+    <div class="skeleton-card"><div><div class="skeleton-line skeleton-line--title"></div><div class="skeleton-line skeleton-line--sub"></div></div><div class="skeleton-line skeleton-line--price"></div></div>
+    <div class="skeleton-card"><div><div class="skeleton-line skeleton-line--title"></div><div class="skeleton-line skeleton-line--sub"></div></div><div class="skeleton-line skeleton-line--price"></div></div>
+    <div class="skeleton-card"><div><div class="skeleton-line skeleton-line--title"></div><div class="skeleton-line skeleton-line--sub"></div></div><div class="skeleton-line skeleton-line--price"></div></div>
+  </div>
+
   <!-- State messages — exactly one shown depending on reason. -->
   <div class="flight-options-state" data-flights-state hidden>
     <p data-flights-state-text></p>

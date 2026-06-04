@@ -39,6 +39,12 @@
 
   <p class="activities-meta" data-activities-meta hidden></p>
 
+  {/* Feature 2: loading skeleton — photo cards, hidden on render. */}
+  <div class="skeleton-list" data-activities-skeleton hidden aria-hidden="true">
+    <div class="skeleton-card skeleton-card--tall"><div class="skeleton-photo"></div><div class="skeleton-line skeleton-line--title"></div><div class="skeleton-line skeleton-line--sub"></div></div>
+    <div class="skeleton-card skeleton-card--tall"><div class="skeleton-photo"></div><div class="skeleton-line skeleton-line--title"></div><div class="skeleton-line skeleton-line--sub"></div></div>
+  </div>
+
   <div class="activities-state" data-activities-state hidden>
     <p data-activities-state-text></p>
   </div>

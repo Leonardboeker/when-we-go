@@ -1,0 +1,195 @@
+---
+// src/components/Onboarding.astro
+// Feature 4 — first-visit onboarding bottom sheet (3 steps).
+// Shown once per device (gated by localStorage 'wwg-onboarded'). Explains the
+// flow so a first-time participant knows what to do without reading docs.
+// Self-contained: markup + style + inline script. Renders hidden on SSR; the
+// script reveals it only if the user hasn't seen it before.
+---
+
+<div id="onboarding" class="onboarding" hidden role="dialog" aria-modal="true" aria-labelledby="onb-title">
+  <div class="onboarding-backdrop" data-onb-dismiss></div>
+  <div class="onboarding-sheet">
+    <div class="onboarding-grip" aria-hidden="true"></div>
+    <h2 id="onb-title" class="onboarding-title">So funktioniert's</h2>
+    <p class="onboarding-sub">In unter einer Minute zum gemeinsamen Termin.</p>
+
+    <ol class="onboarding-steps">
+      <li class="onboarding-step">
+        <span class="onboarding-step-num">1</span>
+        <div>
+          <strong>Tage antippen</strong>
+          <p>Markier die Tage, an denen du Zeit hast — <span class="onb-chip onb-chip-yes">Ja</span> <span class="onb-chip onb-chip-maybe">Vielleicht</span> <span class="onb-chip onb-chip-no">Nein</span></p>
+        </div>
+      </li>
+      <li class="onboarding-step">
+        <span class="onboarding-step-num">2</span>
+        <div>
+          <strong>Wir finden den besten Termin</strong>
+          <p>Sobald alle abgestimmt haben, zeigt die App das Datum, an dem die meisten können.</p>
+        </div>
+      </li>
+      <li class="onboarding-step">
+        <span class="onboarding-step-num">3</span>
+        <div>
+          <strong>Flüge, Hotels & Tipps</strong>
+          <p>Danach gibt's automatisch passende Flüge, Hotels und Aktivitäten — alles an einem Ort.</p>
+        </div>
+      </li>
+    </ol>
+
+    <button type="button" class="onboarding-cta" data-onb-dismiss>Los geht's →</button>
+  </div>
+</div>
+
+<style>
+  .onboarding {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+  }
+  .onboarding-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+    animation: onbFade 0.2s ease-out;
+  }
+  .onboarding-sheet {
+    position: relative;
+    width: 100%;
+    max-width: 480px;
+    background: #fff;
+    border-radius: 20px 20px 0 0;
+    padding: 12px 22px calc(24px + env(safe-area-inset-bottom, 0px));
+    box-shadow: 0 -8px 32px rgba(15, 23, 42, 0.2);
+    animation: onbSlide 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  @media (min-width: 520px) {
+    .onboarding { align-items: center; }
+    .onboarding-sheet { border-radius: 20px; margin: 0 16px; }
+  }
+  .onboarding-grip {
+    width: 40px;
+    height: 4px;
+    border-radius: 99px;
+    background: var(--color-outline-variant, #cbd5e1);
+    margin: 4px auto 16px;
+  }
+  .onboarding-title {
+    font-family: var(--font-headline, 'Bricolage Grotesque', sans-serif);
+    font-size: 24px;
+    font-weight: 800;
+    margin: 0 0 4px;
+    color: var(--color-on-background, #0f172a);
+    letter-spacing: -0.01em;
+  }
+  .onboarding-sub {
+    font-family: var(--font-body, 'DM Sans', system-ui, sans-serif);
+    font-size: 14px;
+    color: var(--color-on-surface-variant, #475569);
+    margin: 0 0 20px;
+  }
+  .onboarding-steps {
+    list-style: none;
+    margin: 0 0 22px;
+    padding: 0;
+    display: grid;
+    gap: 18px;
+  }
+  .onboarding-step {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 14px;
+    align-items: start;
+    font-family: var(--font-body, 'DM Sans', system-ui, sans-serif);
+  }
+  .onboarding-step-num {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: var(--color-primary, #0066cc);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 15px;
+    flex-shrink: 0;
+  }
+  .onboarding-step strong {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--color-on-background, #0f172a);
+  }
+  .onboarding-step p {
+    margin: 3px 0 0;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--color-on-surface-variant, #475569);
+  }
+  .onb-chip {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 99px;
+    font-size: 11px;
+    font-weight: 700;
+    vertical-align: middle;
+  }
+  .onb-chip-yes { background: #16a34a; color: #fff; }
+  .onb-chip-maybe { background: #f59e0b; color: #1c1917; }
+  .onb-chip-no { background: #fee2e2; color: #9f1239; }
+  .onboarding-cta {
+    width: 100%;
+    appearance: none;
+    border: none;
+    border-radius: 12px;
+    padding: 15px;
+    background: var(--color-primary, #0066cc);
+    color: #fff;
+    font-family: var(--font-body, 'DM Sans', system-ui, sans-serif);
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .onboarding-cta:hover { background: #0052a3; }
+  @keyframes onbSlide {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+  @keyframes onbFade {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .onboarding-sheet, .onboarding-backdrop { animation: none; }
+  }
+</style>
+
+<script>
+  (function () {
+    const KEY = 'wwg-onboarded';
+    const el = document.getElementById('onboarding');
+    if (!el) return;
+    let seen = false;
+    try { seen = localStorage.getItem(KEY) === '1'; } catch (e) { /* private mode */ }
+    if (seen) return;
+
+    // Reveal on next frame so the slide-in animation plays.
+    requestAnimationFrame(() => { el.hidden = false; });
+
+    function dismiss() {
+      el.hidden = true;
+      try { localStorage.setItem(KEY, '1'); } catch (e) { /* ignore */ }
+    }
+    el.querySelectorAll('[data-onb-dismiss]').forEach((b) => {
+      b.addEventListener('click', dismiss);
+    });
+    document.addEventListener('keydown', function onEsc(e) {
+      if (e.key === 'Escape' && !el.hidden) { dismiss(); }
+    });
+  })();
+</script>

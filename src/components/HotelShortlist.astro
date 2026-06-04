@@ -54,6 +54,12 @@ const { mode } = Astro.props as Props;
 
   <p class="hotel-shortlist-meta" data-hotels-meta hidden></p>
 
+  {/* Feature 2: loading skeleton — photo + lines, hidden on render. */}
+  <div class="skeleton-list" data-hotels-skeleton hidden aria-hidden="true">
+    <div class="skeleton-card skeleton-card--tall"><div class="skeleton-photo"></div><div class="skeleton-line skeleton-line--title"></div><div class="skeleton-line skeleton-line--sub"></div></div>
+    <div class="skeleton-card skeleton-card--tall"><div class="skeleton-photo"></div><div class="skeleton-line skeleton-line--title"></div><div class="skeleton-line skeleton-line--sub"></div></div>
+  </div>
+
   <div class="hotel-shortlist-state" data-hotels-state hidden>
     <p data-hotels-state-text></p>
   </div>

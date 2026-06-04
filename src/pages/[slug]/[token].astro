@@ -13,6 +13,7 @@ import FlightOptions from '../../components/FlightOptions.astro';
 import HotelShortlist from '../../components/HotelShortlist.astro';
 import ActivitiesList from '../../components/ActivitiesList.astro';
 import BottomNav from '../../components/BottomNav.astro';
+import Onboarding from '../../components/Onboarding.astro';
 import { buildICalDownloadUrl } from '../../lib/calendar-links';
 
 export const prerender = true;
@@ -120,6 +121,11 @@ const icalDownloadUrl = buildICalDownloadUrl({
 
     {/* ── Section: Trip (post-close results) ────────────────────────── */}
     <div class="page-section" data-section="trip" hidden>
+      {/* Feature 5: closed-state banner — shown when the poll has ended. */}
+      <div id="trip-closed-banner" class="trip-closed-banner" hidden>
+        <span class="trip-closed-icon" aria-hidden="true">✅</span>
+        <span id="trip-closed-text">Die Abstimmung ist beendet — hier sind die Ergebnisse.</span>
+      </div>
       <p class="trip-preclose-hint" id="trip-pre-close-msg" hidden>
         ✈️ Trip details appear here once the poll closes.
       </p>
@@ -141,6 +147,9 @@ const icalDownloadUrl = buildICalDownloadUrl({
   </main>
 
   <BottomNav />
+
+  {/* Feature 4: first-visit onboarding sheet (shows once per device) */}
+  <Onboarding />
 
   <script
     is:inline
@@ -298,9 +307,12 @@ const icalDownloadUrl = buildICalDownloadUrl({
       profileFormEl.addEventListener('submit', submitProfile);
     }
 
-    /** @param {string} msg */
-    function setStatus(msg) {
-      if (statusEl) statusEl.textContent = msg;
+    /** @param {string} msg @param {'saving'|'saved'|'error'|''} [kind] */
+    function setStatus(msg, kind) {
+      if (!statusEl) return;
+      statusEl.textContent = msg;
+      if (kind) statusEl.dataset.kind = kind;
+      else delete statusEl.dataset.kind;
     }
 
     /** @param {string} msg @param {'ok'|'err'} kind */
@@ -319,10 +331,13 @@ const icalDownloadUrl = buildICalDownloadUrl({
       for (const s of STATES) cell.classList.remove(CLASS_PREFIX + s);
       cell.classList.add(CLASS_PREFIX + state);
       cell.dataset.state = state;
+      // Feature 9: screen-reader-friendly label with current vote in German.
+      const STATE_DE = { unset: 'noch offen', yes: 'Ja', maybe: 'Vielleicht', no: 'Nein' };
       cell.setAttribute(
         'aria-label',
-        cell.dataset.date + ' — ' + state + ' (tap to change)'
+        cell.dataset.date + ', Stimme: ' + (STATE_DE[state] || state)
       );
+      cell.setAttribute('aria-pressed', state !== 'unset' ? 'true' : 'false');
       if (animate) {
         cell.classList.remove('cell-updated');
         // Force reflow to restart animation
@@ -356,7 +371,7 @@ const icalDownloadUrl = buildICalDownloadUrl({
 
     function scheduleSave() {
       if (saveTimer) clearTimeout(saveTimer);
-      setStatus('saving…');
+      setStatus('Speichert…', 'saving');
       saveTimer = setTimeout(persistVotes, DEBOUNCE_MS);
     }
 
@@ -389,11 +404,11 @@ const icalDownloadUrl = buildICalDownloadUrl({
           const j = await res.json().catch(() => ({}));
           throw new Error(j.error || 'HTTP ' + res.status);
         }
-        setStatus('saved');
-        setTimeout(() => setStatus(''), 1200);
+        setStatus('Gespeichert ✓', 'saved');
+        setTimeout(() => setStatus('', ''), 1800);
       } catch (err) {
         if (err && err.name === 'AbortError') return;
-        setStatus('save failed — retry');
+        setStatus('Nicht gespeichert — nochmal tippen', 'error');
         showToast(
           'Save failed: ' + (err && err.message ? err.message : 'unknown'),
           'err'
@@ -424,6 +439,49 @@ const icalDownloadUrl = buildICalDownloadUrl({
       const d = cell.dataset.date;
       if (!d) return;
       onCellTap(d);
+    });
+
+    // ── Feature 9: keyboard navigation (roving tabindex arrow-key grid) ──
+    // Cells are <button>s, so Enter/Space already toggle via the click handler.
+    // This adds Arrow/Home/End focus movement: ±1 = prev/next day, ±7 = same
+    // weekday adjacent week (the flat chronological list is exactly weekday-
+    // aligned at ±7). One cell holds tabindex=0 at a time so Tab lands once.
+    const cellList = Array.prototype.slice.call(
+      grid.querySelectorAll('.calendar-cell-day')
+    );
+    cellList.forEach((c, i) => {
+      c.setAttribute('tabindex', i === 0 ? '0' : '-1');
+      c.setAttribute('role', 'gridcell');
+    });
+    function focusCell(idx) {
+      if (idx < 0 || idx >= cellList.length) return;
+      cellList.forEach((c) => c.setAttribute('tabindex', '-1'));
+      const target = cellList[idx];
+      target.setAttribute('tabindex', '0');
+      target.focus();
+    }
+    grid.addEventListener('keydown', (e) => {
+      const cell = e.target && e.target.closest
+        ? e.target.closest('.calendar-cell-day')
+        : null;
+      if (!cell) return;
+      const i = cellList.indexOf(cell);
+      if (i === -1) return;
+      let next = -1;
+      switch (e.key) {
+        case 'ArrowRight': next = i + 1; break;
+        case 'ArrowLeft': next = i - 1; break;
+        case 'ArrowDown': next = i + 7; break;
+        case 'ArrowUp': next = i - 7; break;
+        case 'Home': next = 0; break;
+        case 'End': next = cellList.length - 1; break;
+        default: return;
+      }
+      e.preventDefault();
+      // Clamp ±7 moves that overshoot to the nearest end so focus never lost.
+      if (next < 0) next = (e.key === 'ArrowUp') ? i : 0;
+      if (next >= cellList.length) next = (e.key === 'ArrowDown') ? i : cellList.length - 1;
+      focusCell(next);
     });
 
     /**
@@ -494,7 +552,22 @@ const icalDownloadUrl = buildICalDownloadUrl({
             if (hasNo) cell.classList.add('cell-has-no');
           });
         }
-        setStatus('poll closed');
+        setStatus('Abstimmung beendet', '');
+        // Feature 5: closed-state banner on the Trip tab + hide pre-close hint.
+        const closedBanner = document.getElementById('trip-closed-banner');
+        const closedText = document.getElementById('trip-closed-text');
+        const preCloseMsg = document.getElementById('trip-pre-close-msg');
+        if (preCloseMsg) preCloseMsg.hidden = true;
+        if (closedBanner) {
+          const ranges = (data.overlap && data.overlap.ranges) || [];
+          const best = ranges.find((r) => r.tier === 'perfect') ||
+            ranges.find((r) => r.tier === 'withEffort') || null;
+          if (closedText && best) {
+            closedText.textContent = 'Abstimmung beendet · Beste Daten: ' +
+              best.start + ' → ' + best.end + ' (' + best.length + ' Tage)';
+          }
+          closedBanner.hidden = false;
+        }
         // Phase 5-7: load trip content (non-blocking).
         loadFlights(false);
         loadHotels();
@@ -585,6 +658,9 @@ const icalDownloadUrl = buildICalDownloadUrl({
 
     // ─── Phase 5: flight options ─────────────────────────────────────────
     const flightSection = document.getElementById('flight-options');
+    const flightSkeleton = flightSection
+      ? flightSection.querySelector('[data-flights-skeleton]')
+      : null;
     const flightRefreshBtn = flightSection
       ? flightSection.querySelector('[data-flights-refresh]')
       : null;
@@ -779,6 +855,10 @@ const icalDownloadUrl = buildICalDownloadUrl({
     async function loadFlights(forceRefresh) {
       if (!flightSection) return;
       flightSection.hidden = false;
+      // Feature 2: show skeleton while loading (hide stale list/state).
+      if (flightSkeleton) flightSkeleton.hidden = false;
+      if (flightListEl) flightListEl.hidden = true;
+      if (flightStateEl) flightStateEl.hidden = true;
       if (flightRefreshBtn) {
         flightRefreshBtn.disabled = true;
         flightRefreshBtn.textContent = forceRefresh ? 'Refreshing…' : 'Loading…';
@@ -816,6 +896,7 @@ const icalDownloadUrl = buildICalDownloadUrl({
           flightStateEl.hidden = false;
         }
       } finally {
+        if (flightSkeleton) flightSkeleton.hidden = true;
         if (flightRefreshBtn) {
           flightRefreshBtn.textContent = 'Refresh prices';
           flightRefreshBtn.disabled = false;
@@ -829,6 +910,9 @@ const icalDownloadUrl = buildICalDownloadUrl({
 
     // ─── Phase 6: hotel shortlist (shared list) ──────────────────────────
     const hotelSection = document.getElementById('hotel-shortlist');
+    const hotelSkeleton = hotelSection
+      ? hotelSection.querySelector('[data-hotels-skeleton]')
+      : null;
     const hotelListEl = hotelSection
       ? hotelSection.querySelector('[data-hotels-list]')
       : null;
@@ -1012,6 +1096,11 @@ const icalDownloadUrl = buildICalDownloadUrl({
 
     async function loadHotels() {
       if (!hotelSection) return;
+      hotelSection.hidden = false;
+      // Feature 2: show skeleton while loading.
+      if (hotelSkeleton) hotelSkeleton.hidden = false;
+      if (hotelListEl) hotelListEl.hidden = true;
+      if (hotelStateEl) hotelStateEl.hidden = true;
       try {
         const url =
           apiBase +
@@ -1029,6 +1118,8 @@ const icalDownloadUrl = buildICalDownloadUrl({
             'Could not load hotels right now — try refreshing the page.';
           hotelStateEl.hidden = false;
         }
+      } finally {
+        if (hotelSkeleton) hotelSkeleton.hidden = true;
       }
     }
 
@@ -1052,6 +1143,9 @@ const icalDownloadUrl = buildICalDownloadUrl({
 
     // ─── Phase 7: activities (Claude-curated) ────────────────────────────
     const activitiesSection = document.getElementById('activities-list');
+    const activitiesSkeleton = activitiesSection
+      ? activitiesSection.querySelector('[data-activities-skeleton]')
+      : null;
     const activitiesDemoBanner = activitiesSection
       ? activitiesSection.querySelector('[data-activities-demo-banner]')
       : null;
@@ -1221,6 +1315,10 @@ const icalDownloadUrl = buildICalDownloadUrl({
 
     async function loadActivities() {
       if (!activitiesSection) return;
+      activitiesSection.hidden = false;
+      // Feature 2: show skeleton while loading.
+      if (activitiesSkeleton) activitiesSkeleton.hidden = false;
+      if (activitiesStateEl) activitiesStateEl.hidden = true;
       try {
         const url =
           apiBase +
@@ -1239,6 +1337,8 @@ const icalDownloadUrl = buildICalDownloadUrl({
           activitiesStateEl.hidden = false;
           activitiesSection.hidden = false;
         }
+      } finally {
+        if (activitiesSkeleton) activitiesSkeleton.hidden = true;
       }
     }
 
@@ -1331,17 +1431,28 @@ const icalDownloadUrl = buildICalDownloadUrl({
       const ranges = (overlap && overlap.ranges) || [];
       const perfect = ranges.filter((r) => r.tier === 'perfect');
       const withEffort = ranges.filter((r) => r.tier === 'withEffort');
+      const oneShort = ranges.filter((r) => r.tier === 'oneShort');
       let msg;
+      let kind = 'ok';
       if (perfect.length > 0) {
         const top = perfect[0];
         msg = '🎉 Best dates: ' + top.start + ' → ' + top.end + ' (' + top.length + ' days)';
       } else if (withEffort.length > 0) {
         const top = withEffort[0];
-        msg = '✨ With effort: ' + top.start + ' → ' + top.end + ' (' + top.length + ' days)';
+        msg = '✨ With a little effort: ' + top.start + ' → ' + top.end + ' (' + top.length + ' days) — almost everyone can make it';
+      } else if (oneShort.length > 0) {
+        // Feature 3: graceful fallback — no date worked for everyone, but
+        // suggest the window where the fewest people are missing.
+        const top = oneShort.slice().sort((a, b) => b.length - a.length)[0];
+        msg = '🤏 No date worked for all — but ' + top.start + ' → ' + top.end +
+          ' is closest (just one person short). Worth a group chat?';
+        kind = 'warn';
       } else {
-        msg = '😕 No dates worked for everyone.';
+        msg = '😕 No overlapping dates yet. Try nudging people to add more "maybe" days, or pick a new window together.';
+        kind = 'warn';
       }
       summaryTextEl.textContent = msg;
+      summaryBanner.dataset.kind = kind;
       summaryBanner.hidden = false;
     }
 
@@ -1437,6 +1548,28 @@ const icalDownloadUrl = buildICalDownloadUrl({
     font-size: 15px;
     font-weight: 600;
   }
+  /* Feature 3: warn variant when no clean overlap exists */
+  .poll-summary-banner[data-kind='warn'] {
+    background: #fef3c7;
+    color: #78350f;
+    box-shadow: 0 2px 8px rgba(245, 158, 11, 0.18);
+  }
+  /* Feature 5: closed-state banner on the Trip tab */
+  .trip-closed-banner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 0 16px;
+    padding: 14px 16px;
+    background: var(--color-tertiary-container, #4ade80);
+    color: var(--color-on-tertiary-container, #052e16);
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(22, 163, 74, 0.15);
+    font-family: var(--font-body);
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .trip-closed-icon { font-size: 18px; flex-shrink: 0; }
   .vote-toast {
     position: fixed;
     left: 50%;

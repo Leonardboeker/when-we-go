@@ -29,17 +29,24 @@ export const GET: APIRoute = async ({ params }) => {
   if (!poll) return new Response('Not found', { status: 404 });
 
   const daysLeft = daysUntil(poll.pollCloseAt);
-  const headline = poll.title;
-  const subline = poll.destination ?? '';
+  const destination = poll.destination ?? poll.title;
   const participants = `${poll.participants.length} people`;
+  // Date-range line, e.g. "Jul – Sep 2026"
+  const fmtMon = (iso: string) =>
+    new Date(iso + 'T00:00:00Z').toLocaleString('en-GB', {
+      month: 'short',
+      year: 'numeric',
+    });
+  const startMon = fmtMon(poll.dateRangeStart);
+  const endMon = fmtMon(poll.dateRangeEnd);
+  const dateLine = startMon === endMon ? startMon : `${startMon} – ${endMon}`;
   const footer =
     daysLeft > 0
-      ? `Polling closes in ${daysLeft} day${daysLeft === 1 ? '' : 's'}`
-      : 'Polling closed';
+      ? `Poll closes in ${daysLeft} day${daysLeft === 1 ? '' : 's'}`
+      : 'Poll closed';
 
-  // Compose a 1200×630 OG card.
-  // Palette mirrors Barcelona Pixel Dawn, with the teal accent that makes
-  // when-we-go visually distinct from pay-me-back's rust.
+  // Compose a 1200×630 OG card — modern Ocean Blue design system.
+  // White surface, blue accent bar, clean hierarchy (matches the app UI).
   const svg = await satori(
     {
       type: 'div',
@@ -50,113 +57,151 @@ export const GET: APIRoute = async ({ params }) => {
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'space-between',
-          padding: '64px 72px',
-          background:
-            'linear-gradient(135deg, #f8d4a8 0%, #e8a570 55%, #2c8c8c 100%)',
+          padding: '0',
+          background: '#f0f4f8',
           fontFamily: 'Inter',
-          color: '#2a1f1a',
+          color: '#0f172a',
         },
         children: [
-          // Top row: small "WHEN WE GO" brand
+          // Top accent bar (Ocean Blue → indigo gradient)
+          {
+            type: 'div',
+            props: {
+              style: {
+                width: '1200px',
+                height: '14px',
+                background: 'linear-gradient(90deg, #0066cc 0%, #6366f1 100%)',
+                display: 'flex',
+              },
+            },
+          },
+          // Main white card area
           {
             type: 'div',
             props: {
               style: {
                 display: 'flex',
-                alignItems: 'center',
-                gap: '16px',
-                fontSize: '28px',
-                letterSpacing: '6px',
-                opacity: 0.85,
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+                flexGrow: 1,
+                margin: '40px',
+                padding: '56px 64px',
+                background: '#ffffff',
+                borderRadius: '24px',
+                boxShadow: '0 8px 32px rgba(15,23,42,0.10)',
               },
               children: [
+                // Brand row
                 {
                   type: 'div',
                   props: {
                     style: {
-                      width: '20px',
-                      height: '20px',
-                      background: '#2a1f1a',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '14px',
+                      fontSize: '26px',
+                      fontWeight: 800,
+                      letterSpacing: '0.5px',
+                      color: '#0066cc',
                     },
-                  },
-                },
-                'WHEN WE GO',
-              ],
-            },
-          },
-          // Middle: title + destination + participant count
-          {
-            type: 'div',
-            props: {
-              style: { display: 'flex', flexDirection: 'column', gap: '12px' },
-              children: [
-                {
-                  type: 'div',
-                  props: {
-                    style: {
-                      fontSize: '82px',
-                      lineHeight: 1,
-                      letterSpacing: '-3px',
-                    },
-                    children: headline,
-                  },
-                },
-                ...(subline
-                  ? [
+                    children: [
                       {
                         type: 'div',
                         props: {
                           style: {
-                            fontSize: '52px',
-                            lineHeight: 1.1,
-                            letterSpacing: '-1.5px',
-                            opacity: 0.92,
+                            width: '18px',
+                            height: '18px',
+                            borderRadius: '5px',
+                            background: '#0066cc',
+                            display: 'flex',
                           },
-                          children: subline,
                         },
                       },
-                    ]
-                  : []),
-                {
-                  type: 'div',
-                  props: {
-                    style: {
-                      fontSize: '32px',
-                      letterSpacing: '0.5px',
-                      opacity: 0.8,
-                      marginTop: '6px',
-                    },
-                    children: participants,
+                      'when-we-go',
+                    ],
                   },
                 },
-              ],
-            },
-          },
-          // Bottom: countdown + tap-to-vote button
-          {
-            type: 'div',
-            props: {
-              style: {
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                fontSize: '26px',
-                letterSpacing: '2px',
-                color: '#fef3e2',
-              },
-              children: [
-                { type: 'div', props: { children: footer } },
+                // Destination pill + headline + dates
                 {
                   type: 'div',
                   props: {
                     style: {
-                      padding: '12px 24px',
-                      border: '4px solid #2a1f1a',
-                      background: '#fef3e2',
-                      color: '#2a1f1a',
-                      boxShadow: '6px 6px 0 #2a1f1a',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '18px',
                     },
-                    children: 'TAP TO VOTE →',
+                    children: [
+                      {
+                        type: 'div',
+                        props: {
+                          style: {
+                            display: 'flex',
+                            alignSelf: 'flex-start',
+                            padding: '8px 20px',
+                            background: '#cce0ff',
+                            color: '#001e42',
+                            borderRadius: '999px',
+                            fontSize: '28px',
+                            fontWeight: 800,
+                          },
+                          children: destination,
+                        },
+                      },
+                      {
+                        type: 'div',
+                        props: {
+                          style: {
+                            fontSize: '76px',
+                            lineHeight: 1.02,
+                            letterSpacing: '-3px',
+                            color: '#0f172a',
+                          },
+                          children: 'When can you come?',
+                        },
+                      },
+                      {
+                        type: 'div',
+                        props: {
+                          style: {
+                            display: 'flex',
+                            gap: '18px',
+                            fontSize: '30px',
+                            color: '#475569',
+                          },
+                          children: `${dateLine}  ·  ${participants}`,
+                        },
+                      },
+                    ],
+                  },
+                },
+                // Bottom: countdown + tap-to-vote pill
+                {
+                  type: 'div',
+                  props: {
+                    style: {
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      fontSize: '26px',
+                      color: '#475569',
+                    },
+                    children: [
+                      { type: 'div', props: { children: footer } },
+                      {
+                        type: 'div',
+                        props: {
+                          style: {
+                            padding: '14px 30px',
+                            background: '#0066cc',
+                            color: '#ffffff',
+                            borderRadius: '10px',
+                            fontSize: '26px',
+                            fontWeight: 800,
+                          },
+                          children: 'Tap to vote →',
+                        },
+                      },
+                    ],
                   },
                 },
               ],

@@ -94,7 +94,8 @@ const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
                   isToday(day) && 'is-today',
                 ].filter(Boolean).join(' ')}
                 role="gridcell"
-                aria-label={`${day} — tap to cycle vote`}
+                aria-label={`${day}, Stimme: noch offen`}
+                aria-pressed="false"
                 data-date={day}
                 data-state="unset"
               >
@@ -209,6 +210,12 @@ const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   .calendar-cell-day {
     cursor: pointer;
     position: relative;
+  }
+  /* Feature 9: clear keyboard focus ring (offset so it reads on any fill) */
+  .calendar-cell-day:focus-visible {
+    outline: 3px solid var(--color-primary, #0066cc);
+    outline-offset: 2px;
+    z-index: 3;
   }
   .calendar-cell-day:hover:not([disabled]):not(.cell-readonly) {
     transform: translateY(-2px);
@@ -385,8 +392,24 @@ const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     min-height: 20px;
   }
   .calendar-status-msg {
+    font-family: var(--font-body, 'DM Sans', system-ui, sans-serif);
+    font-weight: 600;
+    color: var(--color-on-surface-variant);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 0;
+    transition: color 0.15s ease;
+  }
+  /* Feature 6: save-state feedback */
+  .calendar-status-msg[data-kind='saving'] { color: var(--color-on-surface-variant); }
+  .calendar-status-msg[data-kind='saved'] {
+    color: #16a34a;
     font-weight: 700;
-    color: var(--color-primary);
+  }
+  .calendar-status-msg[data-kind='error'] {
+    color: var(--color-error, #ba1a1a);
+    font-weight: 700;
   }
 
   @media (min-width: 640px) {

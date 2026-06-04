@@ -677,3 +677,59 @@
     display: none !important;
   }
 }
+
+/* ──────────────────────────────────────────────────────────────────────
+   Feature 2 — Loading skeletons (shared by Flight/Hotel/Activity cards)
+   Shown while the Trip-tab data is being fetched; replaced by real cards.
+   ────────────────────────────────────────────────────────────────────── */
+.skeleton-list {
+  display: grid;
+  gap: 10px;
+  margin: 4px 0;
+}
+.skeleton-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 14px;
+  border: 1.5px solid var(--color-outline-variant, #cbd5e1);
+  border-radius: var(--radius-sm, 6px);
+  background: #fff;
+}
+.skeleton-card--tall { grid-template-columns: 1fr; }
+.skeleton-line {
+  height: 12px;
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    var(--color-surface-container, #dce8f5) 25%,
+    var(--color-surface-container-low, #eef4fb) 37%,
+    var(--color-surface-container, #dce8f5) 63%
+  );
+  background-size: 400% 100%;
+  animation: skeletonShimmer 1.4s ease-in-out infinite;
+}
+.skeleton-line--title { height: 16px; width: 55%; margin-bottom: 8px; }
+.skeleton-line--sub { width: 80%; }
+.skeleton-line--price { height: 22px; width: 60px; }
+.skeleton-photo {
+  height: 140px;
+  border-radius: 6px 6px 0 0;
+  margin: -14px -14px 12px;
+  background: linear-gradient(
+    90deg,
+    var(--color-surface-container, #dce8f5) 25%,
+    var(--color-surface-container-low, #eef4fb) 37%,
+    var(--color-surface-container, #dce8f5) 63%
+  );
+  background-size: 400% 100%;
+  animation: skeletonShimmer 1.4s ease-in-out infinite;
+}
+@keyframes skeletonShimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: 0 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-line, .skeleton-photo { animation: none; }
+}
