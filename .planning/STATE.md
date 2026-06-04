@@ -4,9 +4,10 @@
 
 ## Current
 
-- **Status:** All 10 planned phases shipped. Full trip planner live.
-- **Active phase:** none
-- **Next step:** wire up API keys in production (see setup table below), then deploy
+- **Status:** All 10 phases shipped. UI redesigned (Stitch "Modern Trip Planner" design system). Aktiv entwickelt.
+- **Active phase:** UI Polish + Stitch-Vorlage vollständig implementieren
+- **PayLeo:** ABGESCHLOSSEN — nicht mehr anfassen
+- **Next step:** Stitch-generierte HTML-Screens als Vorlage für verbleibende UI-Lücken nutzen. WHENWEGO_POLLS_JSON + WHENWEGO_ANTHROPIC_API_KEY in CF Pages setzen.
 
 ## Phase status overview
 

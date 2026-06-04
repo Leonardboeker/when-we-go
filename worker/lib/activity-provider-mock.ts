@@ -182,8 +182,97 @@ function fabricatedThisWeek(
   return picks;
 }
 
+/** Photo + booking link lookup — keyed by lowercase activity name fragment. */
+const ACTIVITY_ENRICHMENT: Record<string, { imageUrl: string; bookingUrl?: string }> = {
+  // Copenhagen
+  'tivoli': {
+    imageUrl: 'https://images.unsplash.com/photo-1533106418989-88406c7cc8ca?w=600&h=320&fit=crop',
+    bookingUrl: 'https://www.tivoli.dk/en/buy-tickets',
+  },
+  'nyhavn': {
+    imageUrl: 'https://images.unsplash.com/photo-1513622470522-26c3c8a854bc?w=600&h=320&fit=crop',
+    bookingUrl: 'https://www.google.com/maps/search/Nyhavn+Copenhagen',
+  },
+  'louisiana': {
+    imageUrl: 'https://images.unsplash.com/photo-1518998053901-5348d3961a04?w=600&h=320&fit=crop',
+    bookingUrl: 'https://www.louisiana.dk/en/visit',
+  },
+  'christiania': {
+    imageUrl: 'https://images.unsplash.com/photo-1527576539890-dfa815648363?w=600&h=320&fit=crop',
+    bookingUrl: 'https://www.google.com/maps/search/Christiania+Copenhagen',
+  },
+  'smørrebrød': {
+    imageUrl: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=600&h=320&fit=crop',
+    bookingUrl: 'https://aamanns.dk/en',
+  },
+  'rosenborg': {
+    imageUrl: 'https://images.unsplash.com/photo-1533929736458-ca588d08c8be?w=600&h=320&fit=crop',
+    bookingUrl: 'https://www.kongernessamling.dk/en/rosenborg',
+  },
+  // Barcelona
+  'sagrada': {
+    imageUrl: 'https://images.unsplash.com/photo-1583422409516-2895a77efded?w=600&h=320&fit=crop',
+    bookingUrl: 'https://sagradafamilia.org/en/tickets',
+  },
+  'park güell': {
+    imageUrl: 'https://images.unsplash.com/photo-1539037116277-4db20889f2d4?w=600&h=320&fit=crop',
+    bookingUrl: 'https://parkguell.barcelona/en/tickets',
+  },
+  'tapas': {
+    imageUrl: 'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=600&h=320&fit=crop',
+  },
+  // Paris
+  'louvre': {
+    imageUrl: 'https://images.unsplash.com/photo-1565799557186-4a8acaa0a0c3?w=600&h=320&fit=crop',
+    bookingUrl: 'https://www.louvre.fr/en/visit/tickets',
+  },
+  'musée d\'orsay': {
+    imageUrl: 'https://images.unsplash.com/photo-1572204292164-b35ba943fca7?w=600&h=320&fit=crop',
+    bookingUrl: 'https://www.musee-orsay.fr/en/visit',
+  },
+  // Berlin
+  'east side gallery': {
+    imageUrl: 'https://images.unsplash.com/photo-1528360983277-13d401cdc186?w=600&h=320&fit=crop',
+    bookingUrl: 'https://www.google.com/maps/search/East+Side+Gallery+Berlin',
+  },
+  'pergamon': {
+    imageUrl: 'https://images.unsplash.com/photo-1561033819-09b8c3cd5e72?w=600&h=320&fit=crop',
+    bookingUrl: 'https://www.smb.museum/en/museums-institutions/pergamonmuseum',
+  },
+  // Fallback by type
+  'museum': {
+    imageUrl: 'https://images.unsplash.com/photo-1518998053901-5348d3961a04?w=600&h=320&fit=crop',
+  },
+  'food': {
+    imageUrl: 'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=600&h=320&fit=crop',
+  },
+  'outdoors': {
+    imageUrl: 'https://images.unsplash.com/photo-1501854140801-50d01698950b?w=600&h=320&fit=crop',
+  },
+  'history': {
+    imageUrl: 'https://images.unsplash.com/photo-1533929736458-ca588d08c8be?w=600&h=320&fit=crop',
+  },
+  'neighborhood': {
+    imageUrl: 'https://images.unsplash.com/photo-1513622470522-26c3c8a854bc?w=600&h=320&fit=crop',
+  },
+  'concert': {
+    imageUrl: 'https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?w=600&h=320&fit=crop',
+  },
+};
+
+/** Look up enrichment by activity name (substring match), fall back to type. */
+function enrichmentFor(name: string, type: string): { imageUrl?: string; bookingUrl?: string } {
+  const nameLower = name.toLowerCase();
+  for (const [key, val] of Object.entries(ACTIVITY_ENRICHMENT)) {
+    if (nameLower.includes(key)) return val;
+  }
+  // Fall back to type-based default image
+  return ACTIVITY_ENRICHMENT[type] ?? {};
+}
+
 /** Promote an evergreen template into a finished ActivityItem (mock-sourced). */
 function finalizeMock(e: Evergreen, defaultConfidence: ActivityItem['confidence']): ActivityItem {
+  const enrichment = enrichmentFor(e.name, e.type);
   return {
     name: e.name,
     type: e.type,
@@ -193,6 +282,8 @@ function finalizeMock(e: Evergreen, defaultConfidence: ActivityItem['confidence'
     whyOneSentence: e.whyOneSentence,
     confidence: e.confidence ?? defaultConfidence,
     source: 'mock',
+    imageUrl: enrichment.imageUrl,
+    bookingUrl: enrichment.bookingUrl,
   };
 }
 

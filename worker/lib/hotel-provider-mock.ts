@@ -271,12 +271,41 @@ export class MockHotelProvider implements HotelProvider {
       const bookingHint =
         `DEMO DATA — search '${name} ${cityDisplay}' on Booking.com for real options.`;
 
+      // Unsplash photo by star tier — deterministic pick from a small pool.
+      const HOTEL_PHOTOS: Record<string, string[]> = {
+        '5': [
+          'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=600&h=340&fit=crop',
+          'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?w=600&h=340&fit=crop',
+          'https://images.unsplash.com/photo-1564501049412-61c2a3083791?w=600&h=340&fit=crop',
+        ],
+        '4': [
+          'https://images.unsplash.com/photo-1455587734955-081b22074882?w=600&h=340&fit=crop',
+          'https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?w=600&h=340&fit=crop',
+          'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=600&h=340&fit=crop',
+        ],
+        '3': [
+          'https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=600&h=340&fit=crop',
+          'https://images.unsplash.com/photo-1497436072909-60f360e1d4b1?w=600&h=340&fit=crop',
+        ],
+        '2': [
+          'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=600&h=340&fit=crop',
+        ],
+      };
+      const photoPool = HOTEL_PHOTOS[String(stars)] ?? HOTEL_PHOTOS['3'];
+      const imageUrl = photoPool[randInt(rng, 0, photoPool.length - 1)];
+
+      // Booking.com search link pre-filled with hotel name + dates + guests.
+      const checkinFmt = checkIn.replace(/-/g, '-');
+      const checkoutFmt = checkOut.replace(/-/g, '-');
+      const bookingUrl = `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(name + ' ' + cityDisplay)}&checkin=${checkinFmt}&checkout=${checkoutFmt}&group_adults=${guests}&no_rooms=1`;
+
       hotels.push({
         hotelId,
         name,
         stars,
         distanceToCenterKm,
-        // No imageUrl on mock — UI gracefully omits images when missing.
+        imageUrl,
+        bookingUrl,
         totalPriceEur,
         nightlyPriceEur,
         perPersonEur,

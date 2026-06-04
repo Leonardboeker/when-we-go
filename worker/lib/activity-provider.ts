@@ -54,6 +54,10 @@ export interface ActivityItem {
   confidence: ActivityConfidence;
   /** Provider attribution — UI gates DEMO banner on `source === 'mock'`. */
   source: ActivitySource;
+  /** Unsplash photo URL for the activity thumbnail (optional). */
+  imageUrl?: string;
+  /** Booking / maps / venue link (optional). */
+  bookingUrl?: string;
 }
 
 export interface ActivityList {

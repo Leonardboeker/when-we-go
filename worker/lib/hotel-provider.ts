@@ -56,6 +56,8 @@ export interface HotelOption {
   stars: number;
   distanceToCenterKm: number;
   imageUrl?: string;
+  /** Booking.com / direct link pre-filled with dates + guests. */
+  bookingUrl?: string;
   totalPriceEur: number;
   nightlyPriceEur: number;
   perPersonEur: number;

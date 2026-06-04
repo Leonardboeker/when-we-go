@@ -18,3 +18,4 @@ data/polls.json
 .vscode/*
 !.vscode/extensions.json
 *.log
+stitch-screen*.html

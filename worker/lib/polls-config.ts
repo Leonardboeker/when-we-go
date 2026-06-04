@@ -15,6 +15,8 @@ export interface Poll {
   dateRangeStart: string; // ISO YYYY-MM-DD
   dateRangeEnd: string;   // ISO YYYY-MM-DD
   pollCloseAt: string;    // ISO with TZ offset
+  /** Optional: deadline for hotel + activity voting. ISO date string. */
+  hotelVoteDeadline?: string;
   organizerToken: string;
   participants: Participant[];
   createdAt: string;

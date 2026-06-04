@@ -519,35 +519,35 @@ const icalDownloadUrl = buildICalDownloadUrl({
       const main = document.createElement('div');
       main.className = 'flight-card-main';
       const airlineStrong = document.createElement('strong');
-      airlineStrong.textContent = f.airline + ' (' + f.carrierCode + ')';
+      airlineStrong.textContent = f.airline + (f.carrierCode ? ' (' + f.carrierCode + ')' : '');
       main.appendChild(airlineStrong);
       const meta = document.createElement('div');
       meta.className = 'flight-card-meta';
-      const stopsTxt =
-        f.stops === 0 ? 'Direct' : f.stops + ' stop' + (f.stops > 1 ? 's' : '');
+      const stopsTxt = f.stops === 0 ? 'Direct' : f.stops + ' stop' + (f.stops > 1 ? 's' : '');
       const durTxt = formatDurationMin(f.durationMinTotal);
-      const timeTxt =
-        f.departureTimeLocal && f.arrivalTimeLocal
-          ? fmtFlightTime(f.departureTimeLocal) + ' → ' + fmtFlightTime(f.arrivalTimeLocal)
-          : '';
+      const timeTxt = f.departureTimeLocal && f.arrivalTimeLocal
+        ? fmtFlightTime(f.departureTimeLocal) + ' → ' + fmtFlightTime(f.arrivalTimeLocal) : '';
       meta.textContent = [timeTxt, durTxt, stopsTxt].filter(Boolean).join(' · ');
       main.appendChild(meta);
-      if (f.bookingHint) {
-        const hint = document.createElement('div');
-        hint.className = 'flight-card-meta';
-        hint.style.marginTop = '4px';
-        hint.textContent = f.bookingHint;
-        main.appendChild(hint);
-      }
       li.appendChild(main);
 
       const right = document.createElement('div');
+      right.style.cssText = 'text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:4px';
       const price = document.createElement('div');
       price.className = 'flight-card-price';
       price.textContent = '€' + Math.round(f.priceEur);
       right.appendChild(price);
-      right.appendChild(document.createElement('br'));
-      right.style.textAlign = 'right';
+      // Book link — either Google Flights or pre-built URL
+      const bookLink = document.createElement('a');
+      bookLink.className = 'flight-card-book';
+      bookLink.textContent = 'Buchen →';
+      bookLink.target = '_blank';
+      bookLink.rel = 'noopener noreferrer';
+      const origin = (f.origin && f.origin.iata) ? f.origin.iata : '';
+      const dest = (window._flightDestIata) ? window._flightDestIata : '';
+      const depDate = (f.departureTimeLocal) ? f.departureTimeLocal.slice(0,10) : '';
+      bookLink.href = 'https://www.google.com/travel/flights?q=' + encodeURIComponent('Flights ' + origin + ' to ' + dest + (depDate ? ' ' + depDate : ''));
+      right.appendChild(bookLink);
       li.appendChild(right);
       return li;
     }
@@ -747,6 +747,19 @@ const icalDownloadUrl = buildICalDownloadUrl({
       li.className = 'hotel-card' + (opts.chosen ? ' is-chosen' : '');
       li.dataset.hotelId = h.hotelId;
 
+      // Photo header
+      if (h.imageUrl) {
+        const img = document.createElement('img');
+        img.src = h.imageUrl;
+        img.alt = h.name;
+        img.loading = 'lazy';
+        img.style.cssText = 'width:100%;height:160px;object-fit:cover;border-radius:6px 6px 0 0;display:block;margin:-13px -14px 12px;width:calc(100% + 28px);';
+        li.appendChild(img);
+      }
+
+      const body = document.createElement('div');
+      body.style.cssText = 'display:grid;grid-template-columns:1fr auto;gap:12px;align-items:start';
+
       const main = document.createElement('div');
       const nameEl = document.createElement('p');
       nameEl.className = 'hotel-card-name';
@@ -755,12 +768,8 @@ const icalDownloadUrl = buildICalDownloadUrl({
 
       const metaEl = document.createElement('p');
       metaEl.className = 'hotel-card-meta';
-      metaEl.textContent =
-        '★'.repeat(Math.max(1, Math.min(5, h.stars))) +
-        ' · ' +
-        (h.distanceToCenterKm != null
-          ? h.distanceToCenterKm.toFixed(1) + ' km to centre'
-          : '');
+      metaEl.textContent = '★'.repeat(Math.max(1, Math.min(5, h.stars))) + ' · ' +
+        (h.distanceToCenterKm != null ? h.distanceToCenterKm.toFixed(1) + ' km to centre' : '');
       main.appendChild(metaEl);
 
       if (h.amenities && h.amenities.length > 0) {
@@ -769,7 +778,7 @@ const icalDownloadUrl = buildICalDownloadUrl({
         am.textContent = h.amenities.slice(0, 4).join(' · ');
         main.appendChild(am);
       }
-      li.appendChild(main);
+      body.appendChild(main);
 
       const prices = document.createElement('div');
       prices.className = 'hotel-card-prices';
@@ -783,13 +792,14 @@ const icalDownloadUrl = buildICalDownloadUrl({
       prices.appendChild(ppLabel);
       const total = document.createElement('p');
       total.className = 'hotel-card-total';
-      total.textContent =
-        '€' + h.totalPriceEur + ' total · €' + h.nightlyPriceEur + '/night';
+      total.textContent = '€' + h.totalPriceEur + ' total · €' + h.nightlyPriceEur + '/night';
       prices.appendChild(total);
-      li.appendChild(prices);
+      body.appendChild(prices);
+      li.appendChild(body);
 
       const actions = document.createElement('div');
       actions.className = 'hotel-card-actions';
+
       if (opts.chosen) {
         const badge = document.createElement('span');
         badge.className = 'hotel-card-chosen-badge';
@@ -805,13 +815,25 @@ const icalDownloadUrl = buildICalDownloadUrl({
         voteBtn.addEventListener('click', () => voteForHotel(h.hotelId));
         actions.appendChild(voteBtn);
       }
+
       const tally = document.createElement('span');
       tally.className = 'hotel-card-vote-tally';
       const count = (opts.voteTallies && opts.voteTallies[h.hotelId]) || 0;
       tally.textContent = count + ' vote' + (count === 1 ? '' : 's');
       actions.appendChild(tally);
-      li.appendChild(actions);
 
+      // Booking link
+      if (h.bookingUrl) {
+        const bookLink = document.createElement('a');
+        bookLink.href = h.bookingUrl;
+        bookLink.target = '_blank';
+        bookLink.rel = 'noopener noreferrer';
+        bookLink.textContent = 'Auf Booking.com →';
+        bookLink.style.cssText = 'font-size:12px;font-weight:600;color:#0066cc;text-decoration:none;margin-left:auto;';
+        actions.appendChild(bookLink);
+      }
+
+      li.appendChild(actions);
       return li;
     }
 
@@ -953,8 +975,17 @@ const icalDownloadUrl = buildICalDownloadUrl({
     function renderActivityCard(item) {
       const li = document.createElement('li');
       li.className = 'activity-card';
-      if (item.confidence === 'medium') li.classList.add('is-medium');
-      else if (item.confidence === 'low') li.classList.add('is-low');
+      if (item.confidence === 'low') li.classList.add('is-low');
+
+      // Photo
+      if (item.imageUrl) {
+        const img = document.createElement('img');
+        img.src = item.imageUrl;
+        img.alt = item.name;
+        img.loading = 'lazy';
+        img.style.cssText = 'grid-column:1/-1;width:100%;height:130px;object-fit:cover;border-radius:4px;display:block;';
+        li.appendChild(img);
+      }
 
       const icon = document.createElement('div');
       icon.className = 'activity-card-icon';
@@ -963,44 +994,64 @@ const icalDownloadUrl = buildICalDownloadUrl({
 
       const body = document.createElement('div');
       body.className = 'activity-card-body';
+
+      const nameRow = document.createElement('div');
+      nameRow.style.cssText = 'display:flex;align-items:flex-start;justify-content:space-between;gap:8px';
       const name = document.createElement('p');
       name.className = 'activity-card-name';
+      name.style.margin = '0';
       name.textContent = item.name;
-      body.appendChild(name);
+      nameRow.appendChild(name);
+      // Price badge inline with name
+      const priceTag = document.createElement('span');
+      priceTag.style.cssText = 'font-size:12px;font-weight:700;white-space:nowrap;color:' + (item.paid ? '#0f172a' : '#16a34a');
+      priceTag.textContent = item.paid ? (typeof item.priceEur === 'number' ? '€' + item.priceEur : 'Paid') : 'Free';
+      nameRow.appendChild(priceTag);
+      body.appendChild(nameRow);
+
       const why = document.createElement('p');
       why.className = 'activity-card-why';
       why.textContent = item.whyOneSentence;
       body.appendChild(why);
+
       const meta = document.createElement('p');
       meta.className = 'activity-card-meta';
       meta.textContent = item.dateRange;
       body.appendChild(meta);
+
       if (item.confidence === 'medium') {
         const badge = document.createElement('span');
         badge.className = 'activity-confidence-badge is-medium';
-        badge.textContent = 'ℹ verify dates';
+        badge.textContent = 'ℹ Termine prüfen';
         body.appendChild(badge);
       } else if (item.confidence === 'low') {
         const badge = document.createElement('span');
         badge.className = 'activity-confidence-badge is-low';
-        badge.textContent = '⚠ check current schedule';
+        badge.textContent = '⚠ Aktuelles Programm checken';
         body.appendChild(badge);
       }
-      li.appendChild(body);
 
-      const right = document.createElement('div');
-      right.className = 'activity-card-right';
-      if (item.paid && typeof item.priceEur === 'number') {
-        const priceEl = document.createElement('div');
-        priceEl.className = 'activity-card-price';
-        priceEl.textContent = '€' + item.priceEur;
-        right.appendChild(priceEl);
-      } else if (item.paid) {
-        right.textContent = 'paid';
+      // Booking link
+      if (item.bookingUrl) {
+        const link = document.createElement('a');
+        link.href = item.bookingUrl;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.textContent = 'Mehr Info →';
+        link.style.cssText = 'display:inline-block;margin-top:6px;font-size:12px;font-weight:600;color:#0066cc;text-decoration:none;';
+        body.appendChild(link);
       } else {
-        right.textContent = 'free';
+        // Google Maps fallback
+        const mapsLink = document.createElement('a');
+        mapsLink.href = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(item.name);
+        mapsLink.target = '_blank';
+        mapsLink.rel = 'noopener noreferrer';
+        mapsLink.textContent = 'Google Maps →';
+        mapsLink.style.cssText = 'display:inline-block;margin-top:6px;font-size:12px;font-weight:600;color:#0066cc;text-decoration:none;';
+        body.appendChild(mapsLink);
       }
-      li.appendChild(right);
+
+      li.appendChild(body);
       return li;
     }
 
