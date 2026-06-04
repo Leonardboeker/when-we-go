@@ -53,6 +53,17 @@ const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   data-poll-start={dateRangeStart}
   data-poll-end={dateRangeEnd}
 >
+  <div class="calendar-how-it-works" aria-label="How voting works">
+    <span class="how-label">TAP TO VOTE</span>
+    <span class="how-sep">—</span>
+    <span class="calendar-legend">
+      <span class="calendar-legend-item"><span class="calendar-legend-swatch swatch-yes"></span> Yes</span>
+      <span class="calendar-legend-item"><span class="calendar-legend-swatch swatch-maybe"></span> Maybe</span>
+      <span class="calendar-legend-item"><span class="calendar-legend-swatch swatch-no"></span> No</span>
+    </span>
+    <span class="how-hint">tap again to unset</span>
+  </div>
+
   <div class="calendar-weekdays" aria-hidden="true">
     {WEEKDAY_LABELS.map((label) => (
       <div class={['calendar-weekday', (label === 'Sat' || label === 'Sun') && 'is-weekend'].filter(Boolean).join(' ')}>
@@ -100,11 +111,6 @@ const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   </div>
 
   <div class="calendar-status" aria-live="polite">
-    <span class="calendar-legend">
-      <span class="calendar-legend-item"><span class="calendar-legend-swatch swatch-yes"></span> Yes</span>
-      <span class="calendar-legend-item"><span class="calendar-legend-swatch swatch-maybe"></span> Maybe</span>
-      <span class="calendar-legend-item"><span class="calendar-legend-swatch swatch-no"></span> No</span>
-    </span>
     <span class="calendar-status-msg" data-calendar-status></span>
   </div>
 </section>
@@ -185,12 +191,10 @@ const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   .calendar-cell-day-num {
     line-height: 1;
   }
+  /* Weekend = warm sand. No stripes — stripes are reserved for "maybe" state. */
   .calendar-cell.is-weekend {
-    background-image: repeating-linear-gradient(
-      -45deg,
-      var(--color-surface-container-lowest) 0 4px,
-      var(--color-surface-container) 4px 8px
-    );
+    background: var(--color-surface-container);
+    border-color: var(--color-outline-variant);
   }
   .calendar-cell.is-today {
     border: 2px solid var(--color-primary);
@@ -226,8 +230,18 @@ const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     color: var(--color-on-primary, #fff);
     border-color: var(--color-primary);
   }
-  .cell-yes.is-weekend {
+  /* Voted states override the weekend background cleanly. */
+  .cell-yes.is-weekend,
+  .cell-maybe.is-weekend,
+  .cell-no.is-weekend {
     background-image: none;
+  }
+  .cell-maybe.is-weekend {
+    background-image: repeating-linear-gradient(
+      -45deg,
+      var(--color-surface-container) 0 4px,
+      var(--color-surface-container-high) 4px 8px
+    );
   }
   .cell-maybe {
     background-image: repeating-linear-gradient(
@@ -257,36 +271,74 @@ const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     pointer-events: none;
   }
 
-  .calendar-status {
-    margin: 12px 0 0;
+  /* ── How-it-works bar (sits above the weekday header) ── */
+  .calendar-how-it-works {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    justify-content: space-between;
-    gap: 8px 16px;
+    gap: 6px 10px;
+    padding: 8px 10px;
+    margin-bottom: 10px;
+    background: var(--color-surface-container-high);
+    border: 2px solid var(--color-on-background);
     font-family: var(--font-label, 'JetBrains Mono', monospace);
-    font-size: 12px;
+    font-size: 11px;
     color: var(--color-on-surface-variant);
+  }
+  .how-label {
+    font-weight: 800;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-on-background);
+  }
+  .how-sep {
+    color: var(--color-outline);
+  }
+  .how-hint {
+    margin-left: auto;
+    font-size: 10px;
+    opacity: 0.7;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
   }
   .calendar-legend {
     display: inline-flex;
     flex-wrap: wrap;
-    gap: 8px 14px;
+    gap: 6px 12px;
   }
   .calendar-legend-item {
     display: inline-flex;
     align-items: center;
     gap: 4px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-on-background);
   }
   .calendar-legend-swatch {
     display: inline-block;
     width: 12px;
     height: 12px;
-    border: 1px solid var(--color-on-background);
+    border: 1.5px solid var(--color-on-background);
+    flex-shrink: 0;
   }
   .swatch-yes { background: var(--color-primary); }
   .swatch-maybe { background-image: repeating-linear-gradient(-45deg, var(--color-surface-container) 0 3px, var(--color-surface-container-high) 3px 6px); }
-  .swatch-no { background: var(--color-surface-container-lowest); }
+  .swatch-no { background: var(--color-surface-container-lowest); opacity: 0.55; }
+
+  /* ── Status line (bottom) ── */
+  .calendar-status {
+    margin: 10px 0 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 16px;
+    font-family: var(--font-label, 'JetBrains Mono', monospace);
+    font-size: 12px;
+    color: var(--color-on-surface-variant);
+    min-height: 20px;
+  }
   .calendar-status-msg {
     font-weight: 700;
     color: var(--color-primary);
