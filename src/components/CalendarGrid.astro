@@ -228,34 +228,46 @@ const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     line-height: 1;
     pointer-events: none;
   }
-  /* Vote state visuals */
+  /* ── Vote state visuals — universally readable: green/amber/red ── */
+
+  /* YES — solid green: "I'm available" */
   .cell-yes {
-    background: var(--color-primary, #0066cc);
+    background: #16a34a;
     color: #fff;
-    border-color: var(--color-primary, #0066cc);
-    box-shadow: 0 1px 4px rgba(0, 102, 204, 0.3);
+    border-color: #15803d;
+    box-shadow: 0 1px 6px rgba(22, 163, 74, 0.35);
+    font-weight: 700;
   }
+
+  /* MAYBE — solid amber: "uncertain" */
   .cell-maybe {
-    background: var(--color-primary-fixed, #cce0ff);
-    color: var(--color-primary, #0066cc);
-    border-color: var(--color-primary, #0066cc);
-    border-width: 2px;
+    background: #f59e0b;
+    color: #1c1917;
+    border-color: #d97706;
+    box-shadow: 0 1px 6px rgba(245, 158, 11, 0.35);
+    font-weight: 700;
   }
+
+  /* NO — desaturated red tint with strikethrough: "can't make it" */
   .cell-no {
-    background: var(--color-surface-container-low, #eef4fb);
-    color: var(--color-outline, #94a3b8);
-    border-color: var(--color-outline-variant, #cbd5e1);
-    opacity: 0.6;
+    background: #fee2e2;
+    color: #9f1239;
+    border-color: #fca5a5;
     text-decoration: line-through;
-    text-decoration-color: var(--color-outline, #94a3b8);
+    text-decoration-color: #f87171;
+    text-decoration-thickness: 2px;
+    opacity: 0.85;
   }
+
+  /* UNSET — clean white */
   .cell-unset {
-    background: #fff;
+    background: #ffffff;
   }
-  /* Weekend override — solid warm tint, no stripes */
-  .cell-yes.is-weekend, .cell-maybe.is-weekend, .cell-no.is-weekend {
-    background-image: none;
-  }
+
+  /* Weekend override — voted states take over completely */
+  .cell-yes.is-weekend,
+  .cell-maybe.is-weekend,
+  .cell-no.is-weekend { background-image: none; }
   /* Post-close overlap badges */
   .cell-perfect .calendar-cell-badge::after { content: '✓'; color: var(--color-primary); }
   .cell-witheffort .calendar-cell-badge::after { content: '~'; color: var(--color-on-surface); }
@@ -318,9 +330,9 @@ const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     border: 1.5px solid transparent;
     flex-shrink: 0;
   }
-  .swatch-yes { background: var(--color-primary, #0066cc); }
-  .swatch-maybe { background: var(--color-primary-fixed, #cce0ff); border-color: var(--color-primary, #0066cc); }
-  .swatch-no { background: var(--color-surface-container-low, #eef4fb); opacity: 0.6; border-color: var(--color-outline-variant, #cbd5e1); }
+  .swatch-yes   { background: #16a34a; border-color: #15803d; }
+  .swatch-maybe { background: #f59e0b; border-color: #d97706; }
+  .swatch-no    { background: #fee2e2; border-color: #fca5a5; }
 
   /* ── Status line (bottom) ── */
   .calendar-status {
