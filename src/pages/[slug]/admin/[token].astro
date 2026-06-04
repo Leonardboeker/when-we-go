@@ -113,6 +113,13 @@ const publicApiBase =
           <button type="button" class="admin-button" data-admin-reopen hidden>
             Wieder öffnen (+7 Tage)
           </button>
+          {/* #5 (DSGVO) — export all data + irreversible post-trip wipe */}
+          <button type="button" class="admin-button" data-admin-export>
+            Daten exportieren
+          </button>
+          <button type="button" class="admin-button admin-button-danger" data-admin-wipe>
+            Daten löschen
+          </button>
         </div>
       </div>
       <p class="admin-profiles-summary" data-admin-profiles-summary>
@@ -203,6 +210,8 @@ const publicApiBase =
       const refreshBtn = document.querySelector('[data-admin-refresh]');
       const closeBtn = document.querySelector('[data-admin-close]');
       const reopenBtn = document.querySelector('[data-admin-reopen]');
+      const exportBtn = document.querySelector('[data-admin-export]');
+      const wipeBtn = document.querySelector('[data-admin-wipe]');
       const footEl = document.querySelector('[data-admin-foot]');
 
       /** @param {number|null} ts */
@@ -650,6 +659,54 @@ const publicApiBase =
           }
         });
       }
+      // #5 (DSGVO) — export all data as a downloadable JSON (token via header).
+      if (exportBtn) {
+        exportBtn.addEventListener('click', async () => {
+          exportBtn.disabled = true;
+          try {
+            const url = apiBase + '/api/admin/export?slug=' + encodeURIComponent(slug);
+            const res = await fetch(url, {
+              headers: { 'X-Organizer-Token': organizerToken, Accept: 'application/json' },
+            });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const blob = await res.blob();
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'when-we-go-' + slug + '-export.json';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(a.href);
+          } catch (err) {
+            alert('Export fehlgeschlagen: ' + (err && err.message));
+          } finally {
+            exportBtn.disabled = false;
+          }
+        });
+      }
+
+      // #5 (DSGVO) — irreversible post-trip data wipe (double confirm).
+      if (wipeBtn) {
+        wipeBtn.addEventListener('click', async () => {
+          if (!confirm('ALLE Daten dieser Umfrage unwiderruflich löschen (Stimmen, Profile, E-Mails)? Vorher am besten exportieren.')) return;
+          if (!confirm('Wirklich sicher? Das kann NICHT rückgängig gemacht werden.')) return;
+          wipeBtn.disabled = true;
+          try {
+            const url = apiBase + '/api/admin/wipe?slug=' + encodeURIComponent(slug) + '&confirm=DELETE';
+            const res = await fetch(url, {
+              method: 'POST',
+              headers: { 'X-Organizer-Token': organizerToken, Accept: 'application/json' },
+            });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            alert('Daten gelöscht. Die Seite wird neu geladen.');
+            location.reload();
+          } catch (err) {
+            alert('Löschen fehlgeschlagen: ' + (err && err.message));
+            wipeBtn.disabled = false;
+          }
+        });
+      }
+
       // #8 — reopen a closed poll for 7 more days.
       if (reopenBtn) {
         reopenBtn.addEventListener('click', async () => {

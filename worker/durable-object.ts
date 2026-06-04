@@ -351,6 +351,52 @@ export class WhenWeGoPollDO extends DurableObject {
     return rows.map((r) => ({ token: r.token, ...rowToProfile(r) }));
   }
 
+  // #5 (DSGVO) — full data export: every row of personal/poll data this DO
+  // holds, so the organiser can fulfil an access/portability request.
+  exportAll(): {
+    exportedAt: number;
+    votes: VoteRecord[];
+    profiles: Array<{ token: string } & ParticipantProfile>;
+    meta: Record<string, string>;
+  } {
+    const meta: Record<string, string> = {};
+    for (const r of this.sql.exec(`SELECT key, value FROM poll_meta`).toArray() as Array<{
+      key: string;
+      value: string;
+    }>) {
+      meta[r.key] = r.value;
+    }
+    return {
+      exportedAt: Date.now(),
+      votes: this.getAllVotes(),
+      profiles: this.getAllProfiles(),
+      meta,
+    };
+  }
+
+  // #5 (DSGVO) — irreversible deletion of every row this DO holds. Used for the
+  // post-trip data wipe. Returns the per-table row counts removed.
+  wipeAll(): Record<string, number> {
+    const tables = [
+      'votes',
+      'vote_history',
+      'poll_meta',
+      'participant_profile',
+      'reminders_sent',
+      'proposal_cache',
+      'cost_split',
+    ];
+    const removed: Record<string, number> = {};
+    for (const t of tables) {
+      const before = (
+        this.sql.exec(`SELECT COUNT(*) AS n FROM ${t}`).toArray() as Array<{ n: number }>
+      )[0]?.n ?? 0;
+      this.sql.exec(`DELETE FROM ${t}`);
+      removed[t] = before;
+    }
+    return removed;
+  }
+
   // ─── Phase 9: reminder send tracker ─────────────────────────────────
   // PRIMARY KEY (token, type) guarantees only one row per pair.
   // `wasReminderSent` returns true only when the existing row's status is

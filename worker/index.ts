@@ -34,6 +34,7 @@ import { handleProfile } from './handlers/profile';
 import { handleAdminPoll } from './handlers/admin-poll';
 import { handleAdminClose } from './handlers/admin-close';
 import { handleAdminReopen } from './handlers/admin-reopen';
+import { handleAdminExport, handleAdminWipe } from './handlers/admin-data';
 import { handleIcal, handlePublicIcal } from './handlers/ical';
 import { handleAdminResendSummary } from './handlers/admin-resend-summary';
 import { handleAdminReminderStatus } from './handlers/admin-reminders';
@@ -79,6 +80,12 @@ router.post('/api/admin/close', (req, env, ctx) =>
 );
 router.post('/api/admin/reopen', (req, env, ctx) =>
   handleAdminReopen(req, env as Env, ctx)
+);
+router.get('/api/admin/export', (req, env, ctx) =>
+  handleAdminExport(req, env as Env, ctx)
+);
+router.post('/api/admin/wipe', (req, env, ctx) =>
+  handleAdminWipe(req, env as Env, ctx)
 );
 router.get('/api/ical', (req, env, ctx) =>
   handleIcal(req, env as Env, ctx)
