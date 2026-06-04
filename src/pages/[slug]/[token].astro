@@ -1348,13 +1348,13 @@ const icalDownloadUrl = buildICalDownloadUrl({
     async function refreshState() {
       const url =
         apiBase +
-        ‘/api/poll?slug=’ +
+        '/api/poll?slug=' +
         encodeURIComponent(slug) +
-        ‘&token=’ +
+        '&token=' +
         encodeURIComponent(token);
       try {
-        const res = await fetch(url, { headers: { Accept: ‘application/json’ } });
-        if (!res.ok) throw new Error(‘HTTP ‘ + res.status);
+        const res = await fetch(url, { headers: { Accept: 'application/json' } });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
         const data = await res.json();
         applyServerState(data);
         // Feature 1: start live-poll interval when poll is open, stop when closed
@@ -1365,12 +1365,12 @@ const icalDownloadUrl = buildICalDownloadUrl({
           pollInterval = null;
         }
       } catch (err) {
-        setStatus(‘offline — votes won’t save’);
+        setStatus('offline — votes won’t save');
       }
     }
 
-    document.addEventListener(‘visibilitychange’, () => {
-      if (document.visibilityState === ‘visible’) refreshState();
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') refreshState();
     });
 
     refreshState();
