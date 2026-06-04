@@ -24,61 +24,61 @@
 }
 
 @theme {
-  /* === Color tokens — Barcelona Pixel Dawn === */
-  /* Surface tones (warm cream → sand) */
-  --color-surface: #fff8ef;
-  --color-surface-bright: #fff8ef;
-  --color-surface-dim: #e6d9b9;
+  /* === Color tokens — Modern Trip Planner (Ocean Blue) === */
+  /* Clean cool surfaces: white cards on blue-gray background */
+  --color-surface: #ffffff;
+  --color-surface-bright: #ffffff;
+  --color-surface-dim: #c8d8ea;
   --color-surface-container-lowest: #ffffff;
-  --color-surface-container-low: #fff3d5;
-  --color-surface-container: #faedcc;
-  --color-surface-container-high: #f4e7c6;
-  --color-surface-container-highest: #eee2c1;
-  --color-surface-variant: #eee2c1;
+  --color-surface-container-low: #eef4fb;
+  --color-surface-container: #dce8f5;
+  --color-surface-container-high: #c9daf0;
+  --color-surface-container-highest: #b6cbea;
+  --color-surface-variant: #dce8f5;
 
-  /* Primary — warm teal (when-we-go differentiator: "going somewhere") */
-  --color-primary: #2c8c8c;
-  --color-primary-container: #5cb5b5;
-  --color-primary-fixed: #b8e6e6;
-  --color-primary-fixed-dim: #7fcccc;
+  /* Primary — ocean blue ("going somewhere") */
+  --color-primary: #0066cc;
+  --color-primary-container: #3388dd;
+  --color-primary-fixed: #cce0ff;
+  --color-primary-fixed-dim: #99c2ff;
   --color-on-primary: #ffffff;
-  --color-on-primary-container: #003d3d;
-  --color-on-primary-fixed: #001b1b;
-  --color-on-primary-fixed-variant: #004b4b;
-  --color-inverse-primary: #7fcccc;
+  --color-on-primary-container: #001e42;
+  --color-on-primary-fixed: #001433;
+  --color-on-primary-fixed-variant: #004999;
+  --color-inverse-primary: #99c2ff;
 
-  /* Secondary — deep terracotta */
-  --color-secondary: #9f4127;
-  --color-secondary-container: #fc8868;
-  --color-secondary-fixed: #ffdbd1;
-  --color-secondary-fixed-dim: #ffb5a1;
+  /* Secondary — sunset orange (energy, excitement) */
+  --color-secondary: #c24b0a;
+  --color-secondary-container: #f97316;
+  --color-secondary-fixed: #ffe8d5;
+  --color-secondary-fixed-dim: #ffc49a;
   --color-on-secondary: #ffffff;
-  --color-on-secondary-container: #732109;
-  --color-on-secondary-fixed: #3b0800;
-  --color-on-secondary-fixed-variant: #7f2a12;
+  --color-on-secondary-container: #4a1800;
+  --color-on-secondary-fixed: #330f00;
+  --color-on-secondary-fixed-variant: #8a2800;
 
-  /* Tertiary — deep teal/blue */
-  --color-tertiary: #226583;
-  --color-tertiary-container: #77b3d4;
-  --color-tertiary-fixed: #c3e8ff;
-  --color-tertiary-fixed-dim: #92cef1;
+  /* Tertiary — fresh green (confirmed/success states) */
+  --color-tertiary: #16a34a;
+  --color-tertiary-container: #4ade80;
+  --color-tertiary-fixed: #d1fae5;
+  --color-tertiary-fixed-dim: #86efac;
   --color-on-tertiary: #ffffff;
-  --color-on-tertiary-container: #00455e;
-  --color-on-tertiary-fixed: #001e2c;
-  --color-on-tertiary-fixed-variant: #004c68;
+  --color-on-tertiary-container: #052e16;
+  --color-on-tertiary-fixed: #031a0d;
+  --color-on-tertiary-fixed-variant: #14532d;
 
   /* Ink + outline */
-  --color-on-background: #211b07;
-  --color-on-surface: #211b07;
-  --color-on-surface-variant: #524438;
-  --color-outline: #857466;
-  --color-outline-variant: #d8c3b2;
-  --color-inverse-surface: #37301a;
-  --color-inverse-on-surface: #fdf0cf;
-  --color-surface-tint: #2c8c8c;
+  --color-on-background: #0f172a;
+  --color-on-surface: #0f172a;
+  --color-on-surface-variant: #475569;
+  --color-outline: #94a3b8;
+  --color-outline-variant: #cbd5e1;
+  --color-inverse-surface: #1e293b;
+  --color-inverse-on-surface: #f1f5f9;
+  --color-surface-tint: #0066cc;
 
   /* Background alias */
-  --color-background: #fff8ef;
+  --color-background: #f0f4f8;
 
   /* Error */
   --color-error: #ba1a1a;
@@ -91,10 +91,10 @@
 
   /* === Typography === */
   --font-pixel: "Press Start 2P", monospace;
-  --font-headline: "Syne", "Helvetica Neue", sans-serif;
-  --font-body: "Space Mono", "Courier New", monospace;
-  --font-label: "JetBrains Mono", "Courier New", monospace;
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-headline: "Bricolage Grotesque", "Syne", "Helvetica Neue", sans-serif;
+  --font-body: "DM Sans", "Space Mono", system-ui, sans-serif;
+  --font-label: "JetBrains Mono", ui-monospace, monospace;
+  --font-sans: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
 
   /* === Type scale (Stitch design.md) === */
   --text-label-sm: 12px;
@@ -126,12 +126,11 @@
     font-family: var(--font-body);
     color: var(--color-on-background);
     background: var(--color-background);
-    -webkit-font-smoothing: none;
-    text-rendering: geometricPrecision;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
   }
   body {
     line-height: 1.55;
-    image-rendering: pixelated;
   }
   /* All pixel-art images crisp */
   img.pixel,

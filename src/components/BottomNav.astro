@@ -1,0 +1,190 @@
+---
+// src/components/BottomNav.astro
+// Phase 3 Polish — persistent bottom tab bar for mobile navigation.
+// Three tabs: Dates (calendar/voting), Trip (post-close results), Profile (settings).
+// JS wires tab clicks to show/hide page sections + updates active state.
+// Trip tab auto-activates when the poll closes (called from [token].astro IIFE).
+---
+
+<nav class="bottom-nav" id="bottom-nav" role="navigation" aria-label="Page sections">
+  <button
+    class="bottom-nav-tab is-active"
+    data-tab="dates"
+    aria-current="page"
+    type="button"
+  >
+    <span class="bottom-nav-icon" aria-hidden="true">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+        <line x1="16" y1="2" x2="16" y2="6"></line>
+        <line x1="8" y1="2" x2="8" y2="6"></line>
+        <line x1="3" y1="10" x2="21" y2="10"></line>
+      </svg>
+    </span>
+    <span class="bottom-nav-label">Dates</span>
+  </button>
+
+  <button
+    class="bottom-nav-tab"
+    data-tab="trip"
+    aria-current="false"
+    type="button"
+  >
+    <span class="bottom-nav-icon" aria-hidden="true">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M17.8 19.2 16 11l3.5-3.5C21 6 21 4 19 2c-2-2-4-1-5.5.5L10 6 1.8 6.2c-.5.1-.9.5-.9 1L1 9c0 .6.4 1 1 1l4-1 2 2-4 1c-.6 0-1 .4-1 1v1.8c0 .5.4.9.9.9L7 15l2 2-1 4c0 .6.4 1 1 1h1.8c.5 0 .9-.4.9-.9L12 17l3 3c.5.5 1.3.5 1.8 0l1-.8c.4-.4.5-1 .2-1.5z"></path>
+      </svg>
+    </span>
+    <span class="bottom-nav-label">Trip</span>
+    <span class="bottom-nav-badge" id="trip-badge" hidden aria-label="New results">●</span>
+  </button>
+
+  <button
+    class="bottom-nav-tab"
+    data-tab="profile"
+    aria-current="false"
+    type="button"
+  >
+    <span class="bottom-nav-icon" aria-hidden="true">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+        <circle cx="12" cy="7" r="4"></circle>
+      </svg>
+    </span>
+    <span class="bottom-nav-label">Profile</span>
+  </button>
+</nav>
+
+<style>
+  .bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 40;
+    display: flex;
+    align-items: stretch;
+    background: var(--color-surface, #fff);
+    border-top: 1.5px solid var(--color-outline-variant, #cbd5e1);
+    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.08);
+    /* Safe area for iPhones with home indicator */
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .bottom-nav-tab {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 10px 4px 8px;
+    border: none;
+    background: transparent;
+    color: var(--color-on-surface-variant, #475569);
+    cursor: pointer;
+    position: relative;
+    transition: color 0.15s ease, background 0.15s ease;
+    -webkit-tap-highlight-color: transparent;
+    min-height: 56px;
+  }
+
+  .bottom-nav-tab:hover {
+    background: var(--color-surface-container-low, #eef4fb);
+    color: var(--color-on-background, #0f172a);
+  }
+
+  .bottom-nav-tab.is-active {
+    color: var(--color-primary, #0066cc);
+  }
+
+  /* Active indicator bar at top */
+  .bottom-nav-tab.is-active::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 25%;
+    right: 25%;
+    height: 2.5px;
+    background: var(--color-primary, #0066cc);
+    border-radius: 0 0 2px 2px;
+  }
+
+  .bottom-nav-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+  }
+
+  .bottom-nav-label {
+    font-family: var(--font-sans, 'DM Sans', system-ui, sans-serif);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    line-height: 1;
+  }
+
+  .bottom-nav-badge {
+    position: absolute;
+    top: 8px;
+    right: calc(50% - 14px);
+    font-size: 8px;
+    color: var(--color-secondary-container, #f97316);
+    line-height: 1;
+  }
+
+  /* Hide on desktop — page has enough space to show everything */
+  @media (min-width: 768px) {
+    .bottom-nav {
+      display: none;
+    }
+  }
+</style>
+
+<script>
+  (function () {
+    const nav = document.getElementById('bottom-nav');
+    if (!nav) return;
+
+    const tabs = nav.querySelectorAll('.bottom-nav-tab');
+    const badge = document.getElementById('trip-badge');
+
+    function switchTab(targetTab) {
+      // Update tab active states
+      tabs.forEach((tab) => {
+        const isTarget = tab.dataset.tab === targetTab;
+        tab.classList.toggle('is-active', isTarget);
+        tab.setAttribute('aria-current', isTarget ? 'page' : 'false');
+      });
+
+      // Show/hide page sections
+      const allSections = document.querySelectorAll('.page-section');
+      allSections.forEach((section) => {
+        section.hidden = section.dataset.section !== targetTab;
+      });
+
+      // Clear trip badge when switching to trip
+      if (targetTab === 'trip' && badge) {
+        badge.hidden = true;
+      }
+
+      // Scroll to top when switching tabs
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    tabs.forEach((tab) => {
+      tab.addEventListener('click', () => switchTab(tab.dataset.tab));
+    });
+
+    // Expose to the main IIFE so it can auto-switch when the poll closes
+    window.__switchToTripTab = function (showBadge = false) {
+      if (showBadge && badge) badge.hidden = false;
+      switchTab('trip');
+    };
+    window.__switchToBadgeTripTab = function () {
+      if (badge) badge.hidden = false;
+    };
+  })();
+</script>
