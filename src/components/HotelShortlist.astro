@@ -32,7 +32,7 @@ const { mode } = Astro.props as Props;
 >
   <div class="hotel-shortlist-header">
     <h2 id="hotel-shortlist-title" class="hotel-shortlist-title">
-      Hotels for the group
+      Hotels für die Gruppe
     </h2>
     {
       mode === 'admin' && (
@@ -41,16 +41,14 @@ const { mode } = Astro.props as Props;
           class="hotel-shortlist-refresh"
           data-hotels-refresh
         >
-          Refresh hotels
+          Aktualisieren
         </button>
       )
     }
   </div>
 
-  <div class="hotel-shortlist-demo-banner" data-hotels-demo-banner hidden>
-    <strong>📍 DEMO hotel data</strong> — real provider not configured yet.
-    Prices are illustrative; use Booking.com / Hostelworld for actual booking.
-  </div>
+  {/* Curated real hotels → provider.isReal = true → this banner stays hidden. */}
+  <div class="hotel-shortlist-demo-banner" data-hotels-demo-banner hidden></div>
 
   <p class="hotel-shortlist-meta" data-hotels-meta hidden></p>
 
@@ -67,8 +65,8 @@ const { mode } = Astro.props as Props;
   <ul class="hotel-shortlist-list" data-hotels-list hidden></ul>
 
   <p class="hotel-shortlist-disclaimer">
-    Shared shortlist — everyone in the group sees the same hotels. Per-person
-    price = total ÷ {`{`}group size{`}`} (we round up so no-one's short by €1).
+    Handverlesene echte Hotels — alle sehen dieselbe Liste. Aktuelle Preise und
+    Verfügbarkeit siehst du live auf Booking.com.
   </p>
 </section>
 
@@ -184,6 +182,14 @@ const { mode } = Astro.props as Props;
     letter-spacing: -0.02em;
   }
   .hotel-card.is-chosen .hotel-card-pp { color: #16a34a; }
+  .hotel-card-pp-live {
+    font-family: var(--font-headline, 'Bricolage Grotesque', sans-serif);
+    font-size: 16px;
+    font-weight: 800;
+    margin: 0;
+    color: var(--color-primary, #0066cc);
+    letter-spacing: -0.01em;
+  }
   .hotel-card-pp-label {
     font-size: 10px;
     text-transform: uppercase;

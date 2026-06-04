@@ -29,6 +29,7 @@ export type HotelReason =
 
 export type HotelSource =
   | 'mock'
+  | 'curated'
   | 'amadeus'
   | 'booking'
   | 'hotellook'
@@ -58,6 +59,8 @@ export interface HotelOption {
   imageUrl?: string;
   /** Booking.com / direct link pre-filled with dates + guests. */
   bookingUrl?: string;
+  /** Curated real hotels carry no in-app price — UI shows "Preis live ansehen". */
+  priceUnknown?: boolean;
   totalPriceEur: number;
   nightlyPriceEur: number;
   perPersonEur: number;
@@ -86,12 +89,11 @@ export interface HotelProvider {
  * MockHotelProvider — future branches add real providers gated on the
  * matching env secret being present. Mirrors getFlightProvider exactly.
  */
-import { MockHotelProvider } from './hotel-provider-mock.ts';
+import { CuratedHotelProvider } from './hotel-provider-curated.ts';
 
 export function getHotelProvider(_env: Env): HotelProvider {
-  // Future:
+  // Real curated hotels (real names + real Booking deep links, no fake prices).
+  // Future: swap to a live-price API when a key is present —
   //   if (_env.WHENWEGO_BOOKING_AFFILIATE_TOKEN) return new BookingHotelProvider(_env);
-  //   if (_env.WHENWEGO_HOTELLOOK_API_KEY) return new HotellookHotelProvider(_env);
-  //   if (_env.WHENWEGO_HOSTELWORLD_API_KEY) return new HostelworldHotelProvider(_env);
-  return new MockHotelProvider();
+  return new CuratedHotelProvider();
 }

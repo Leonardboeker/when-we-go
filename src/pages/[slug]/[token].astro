@@ -746,14 +746,24 @@ const icalDownloadUrl = buildICalDownloadUrl({
     }
 
     function buildGoogleFlightsUrl(originIata, destIata, depart, ret) {
-      const q =
-        'Flights from ' +
-        originIata +
-        ' to ' +
-        destIata +
-        (depart ? ' on ' + depart : '') +
-        (ret ? ' returning ' + ret : '');
+      // Real Google Flights search — opens live results (no fake prices in-app).
+      const q = originIata
+        ? 'Flights from ' + originIata + ' to ' + destIata +
+          (depart ? ' on ' + depart : '') + (ret ? ' returning ' + ret : '')
+        : 'Flights to ' + destIata + (depart ? ' on ' + depart : '');
       return 'https://www.google.com/travel/flights?q=' + encodeURIComponent(q);
+    }
+
+    function buildSkyscannerUrl(originIata, destIata, depart, ret) {
+      // Real Skyscanner deep link: /transport/fluge/<o>/<d>/<yymmdd>/<yymmdd>/
+      const o = (originIata || '').toLowerCase();
+      const d = (destIata || '').toLowerCase();
+      if (!o || !d) return '';
+      const yymmdd = (iso) => (iso ? iso.slice(2).replace(/-/g, '') : '');
+      let url = 'https://www.skyscanner.de/transport/fluge/' + o + '/' + d + '/';
+      if (depart) url += yymmdd(depart) + '/';
+      if (depart && ret) url += yymmdd(ret) + '/';
+      return url;
     }
 
     function reasonMessage(reason) {
@@ -775,81 +785,108 @@ const icalDownloadUrl = buildICalDownloadUrl({
     }
 
     function renderFlights(data) {
+      // Real-deeplinks mode: no fabricated prices/airlines. We use the Worker's
+      // resolved route (origin IATA from profile, destination IATA from the
+      // poll) + dates, then link to Google Flights + Skyscanner where the user
+      // sees genuine live prices. Everything shown here is real.
       if (!flightSection) return;
       flightSection.hidden = false;
-      // Always show "Refresh prices" once we've loaded once (even on errors).
-      if (flightRefreshBtn) flightRefreshBtn.disabled = false;
 
-      const flights = (data && data.flights) || [];
-      const reason = data && data.reason;
-      const origin = data && data.origin;
-      const destination = data && data.destination;
-      const dateRange = data && data.dateRange;
-      const provider = data && data.provider;
+      const origin = (data && data.origin) || {};
+      const destination = (data && data.destination) || {};
+      const dateRange = (data && data.dateRange) || {};
+      const oIata = origin.iata || '';
+      const dIata = destination.iata || '';
+      const start = dateRange.start || '';
+      const end = dateRange.end || '';
 
-      // Phase 5: DEMO banner when provider is mock (isReal === false).
-      if (flightDemoBanner) {
-        flightDemoBanner.hidden = !(provider && provider.isReal === false);
-      }
-
-      // Meta line (origin → destination, dates).
-      if (flightMetaEl && origin && destination && origin.iata && destination.iata) {
-        flightMetaEl.textContent =
-          origin.iata +
-          ' → ' +
-          destination.iata +
-          (dateRange && dateRange.start
-            ? ' · ' + dateRange.start + ' to ' + dateRange.end
-            : '');
-        flightMetaEl.hidden = false;
-      }
-
-      // Clear previous render.
-      if (flightListEl) {
-        flightListEl.innerHTML = '';
-        flightListEl.hidden = true;
-      }
+      // No fake prices → no "refresh prices" button, no DEMO banner.
+      if (flightRefreshBtn) flightRefreshBtn.hidden = true;
+      if (flightDemoBanner) flightDemoBanner.hidden = true;
       if (flightRestEl) flightRestEl.innerHTML = '';
       if (flightMoreEl) flightMoreEl.hidden = true;
       if (flightStateEl) flightStateEl.hidden = true;
       if (flightGoogleLink) flightGoogleLink.hidden = true;
 
-      if (reason !== 'ok' || flights.length === 0) {
-        if (flightStateEl && flightStateText) {
-          flightStateText.textContent = reasonMessage(reason || 'no_routes');
-          flightStateEl.hidden = false;
-          // Show Google Flights fallback for the cases where it's actionable.
-          if (
-            origin && destination && origin.iata && destination.iata &&
-            (reason === 'no_routes' || reason === 'destination_unmapped' || reason === 'api_down')
-          ) {
-            if (flightGoogleLink) {
-              flightGoogleLink.href = buildGoogleFlightsUrl(
-                origin.iata,
-                destination.iata,
-                dateRange && dateRange.start,
-                dateRange && dateRange.end
-              );
-              flightGoogleLink.hidden = false;
-            }
-          }
+      // Meta line
+      if (flightMetaEl) {
+        if (oIata && dIata) {
+          flightMetaEl.textContent = oIata + ' → ' + dIata +
+            (start ? ' · ' + start + ' – ' + end : '');
+          flightMetaEl.hidden = false;
+        } else {
+          flightMetaEl.hidden = true;
         }
+      }
+
+      if (!flightListEl) return;
+      flightListEl.innerHTML = '';
+      flightListEl.hidden = false;
+
+      // Destination couldn't be mapped to an airport → generic city search.
+      if (!dIata) {
+        const li = document.createElement('li');
+        li.className = 'flight-deeplink-note';
+        const a = document.createElement('a');
+        a.target = '_blank'; a.rel = 'noopener noreferrer';
+        a.href = 'https://www.google.com/travel/flights?q=' +
+          encodeURIComponent('Flüge nach ' + pollDestination);
+        a.textContent = 'Auf Google Flights suchen →';
+        li.appendChild(document.createTextNode('Wir konnten das Ziel keinem Flughafen zuordnen. '));
+        li.appendChild(a);
+        flightListEl.appendChild(li);
         return;
       }
 
-      // Render up to 3 cheapest, rest goes into the collapsible.
-      const top = flights.slice(0, 3);
-      const rest = flights.slice(3);
-      if (flightListEl) {
-        for (let i = 0; i < top.length; i++) {
-          flightListEl.appendChild(renderFlightCard(top[i], i === 0));
-        }
-        flightListEl.hidden = false;
+      // No home airport yet → prompt for profile, still offer a dest search.
+      if (!oIata) {
+        const li = document.createElement('li');
+        li.className = 'flight-deeplink-note';
+        const a = document.createElement('a');
+        a.target = '_blank'; a.rel = 'noopener noreferrer';
+        a.href = buildGoogleFlightsUrl('', dIata, start, end);
+        a.textContent = 'Trotzdem nach ' + dIata + ' suchen →';
+        li.appendChild(document.createTextNode(
+          'Trag deinen Heimatflughafen im Profil ein, dann zeigen wir dir direkte Such-Links. '));
+        li.appendChild(a);
+        flightListEl.appendChild(li);
+        return;
       }
-      if (rest.length > 0 && flightRestEl && flightMoreEl) {
-        for (const f of rest) flightRestEl.appendChild(renderFlightCard(f, false));
-        flightMoreEl.hidden = false;
+
+      // Real deep-link card: route + Google Flights + Skyscanner.
+      const li = document.createElement('li');
+      li.className = 'flight-deeplink-card';
+
+      const route = document.createElement('div');
+      route.className = 'flight-deeplink-route';
+      route.textContent = '✈️ ' + oIata + ' → ' + dIata;
+      li.appendChild(route);
+
+      const sub = document.createElement('div');
+      sub.className = 'flight-deeplink-sub';
+      sub.textContent = (start ? start + ' – ' + end : 'an euren Reisedaten') +
+        ' · Live-Preise beim Anbieter';
+      li.appendChild(sub);
+
+      const actions = document.createElement('div');
+      actions.className = 'flight-deeplink-actions';
+      const g = document.createElement('a');
+      g.className = 'flight-deeplink-btn flight-deeplink-btn-primary';
+      g.target = '_blank'; g.rel = 'noopener noreferrer';
+      g.href = buildGoogleFlightsUrl(oIata, dIata, start, end);
+      g.textContent = 'Google Flights →';
+      actions.appendChild(g);
+      const skyUrl = buildSkyscannerUrl(oIata, dIata, start, end);
+      if (skyUrl) {
+        const s = document.createElement('a');
+        s.className = 'flight-deeplink-btn';
+        s.target = '_blank'; s.rel = 'noopener noreferrer';
+        s.href = skyUrl;
+        s.textContent = 'Skyscanner →';
+        actions.appendChild(s);
       }
+      li.appendChild(actions);
+      flightListEl.appendChild(li);
     }
 
     async function loadFlights(forceRefresh) {
@@ -933,14 +970,18 @@ const icalDownloadUrl = buildICalDownloadUrl({
     function hotelReasonMessage(reason) {
       switch (reason) {
         case 'destination_unmapped':
-          return "We couldn't map this destination to a city — try Booking.com directly.";
+          return 'Für dieses Ziel haben wir noch keine handverlesene Liste.';
         case 'no_inventory':
-          return 'No hotels available for these dates — try adjacent days on Booking.com.';
+          return 'Für dieses Ziel haben wir noch keine handverlesene Liste.';
         case 'provider_error':
-          return 'Hotel search is temporarily unavailable — please refresh in a few minutes.';
+          return 'Hotel-Suche gerade nicht verfügbar — gleich nochmal versuchen.';
         default:
           return '';
       }
+    }
+    function bookingCitySearchUrl() {
+      const params = new URLSearchParams({ ss: pollDestination, group_adults: '4', no_rooms: '1' });
+      return 'https://www.booking.com/searchresults.html?' + params.toString();
     }
 
     function renderHotelCard(h, opts) {
@@ -948,18 +989,15 @@ const icalDownloadUrl = buildICalDownloadUrl({
       li.className = 'hotel-card' + (opts.chosen ? ' is-chosen' : '');
       li.dataset.hotelId = h.hotelId;
 
-      // Photo header
+      // Photo header — spans both grid columns and bleeds to the card edges.
       if (h.imageUrl) {
         const img = document.createElement('img');
         img.src = h.imageUrl;
         img.alt = h.name;
         img.loading = 'lazy';
-        img.style.cssText = 'width:100%;height:160px;object-fit:cover;border-radius:6px 6px 0 0;display:block;margin:-13px -14px 12px;width:calc(100% + 28px);';
+        img.style.cssText = 'grid-column:1/-1;width:calc(100% + 28px);height:150px;object-fit:cover;border-radius:6px 6px 0 0;display:block;margin:-13px -14px 0;';
         li.appendChild(img);
       }
-
-      const body = document.createElement('div');
-      body.style.cssText = 'display:grid;grid-template-columns:1fr auto;gap:12px;align-items:start';
 
       const main = document.createElement('div');
       const nameEl = document.createElement('p');
@@ -970,8 +1008,16 @@ const icalDownloadUrl = buildICalDownloadUrl({
       const metaEl = document.createElement('p');
       metaEl.className = 'hotel-card-meta';
       metaEl.textContent = '★'.repeat(Math.max(1, Math.min(5, h.stars))) + ' · ' +
-        (h.distanceToCenterKm != null ? h.distanceToCenterKm.toFixed(1) + ' km to centre' : '');
+        (h.distanceToCenterKm != null ? h.distanceToCenterKm.toFixed(1) + ' km zum Zentrum' : '');
       main.appendChild(metaEl);
+
+      // Curated hotels store the neighbourhood/vibe in bookingHint.
+      if (h.bookingHint) {
+        const areaEl = document.createElement('p');
+        areaEl.className = 'hotel-card-meta';
+        areaEl.textContent = '📍 ' + h.bookingHint;
+        main.appendChild(areaEl);
+      }
 
       if (h.amenities && h.amenities.length > 0) {
         const am = document.createElement('p');
@@ -979,24 +1025,35 @@ const icalDownloadUrl = buildICalDownloadUrl({
         am.textContent = h.amenities.slice(0, 4).join(' · ');
         main.appendChild(am);
       }
-      body.appendChild(main);
+      li.appendChild(main);
 
       const prices = document.createElement('div');
       prices.className = 'hotel-card-prices';
-      const pp = document.createElement('p');
-      pp.className = 'hotel-card-pp';
-      pp.textContent = '€' + h.perPersonEur;
-      prices.appendChild(pp);
-      const ppLabel = document.createElement('span');
-      ppLabel.className = 'hotel-card-pp-label';
-      ppLabel.textContent = 'per person';
-      prices.appendChild(ppLabel);
-      const total = document.createElement('p');
-      total.className = 'hotel-card-total';
-      total.textContent = '€' + h.totalPriceEur + ' total · €' + h.nightlyPriceEur + '/night';
-      prices.appendChild(total);
-      body.appendChild(prices);
-      li.appendChild(body);
+      if (h.priceUnknown) {
+        // Feature 4: no invented prices — real price lives on Booking.
+        const live = document.createElement('p');
+        live.className = 'hotel-card-pp-live';
+        live.textContent = 'Preis live';
+        prices.appendChild(live);
+        const ppLabel = document.createElement('span');
+        ppLabel.className = 'hotel-card-pp-label';
+        ppLabel.textContent = 'auf Booking';
+        prices.appendChild(ppLabel);
+      } else {
+        const pp = document.createElement('p');
+        pp.className = 'hotel-card-pp';
+        pp.textContent = '€' + h.perPersonEur;
+        prices.appendChild(pp);
+        const ppLabel = document.createElement('span');
+        ppLabel.className = 'hotel-card-pp-label';
+        ppLabel.textContent = 'pro Person';
+        prices.appendChild(ppLabel);
+        const total = document.createElement('p');
+        total.className = 'hotel-card-total';
+        total.textContent = '€' + h.totalPriceEur + ' gesamt · €' + h.nightlyPriceEur + '/Nacht';
+        prices.appendChild(total);
+      }
+      li.appendChild(prices);
 
       const actions = document.createElement('div');
       actions.className = 'hotel-card-actions';
@@ -1004,14 +1061,14 @@ const icalDownloadUrl = buildICalDownloadUrl({
       if (opts.chosen) {
         const badge = document.createElement('span');
         badge.className = 'hotel-card-chosen-badge';
-        badge.textContent = '✓ Chosen by organiser';
+        badge.textContent = '✓ Vom Organisator gewählt';
         actions.appendChild(badge);
       } else {
         const voteBtn = document.createElement('button');
         voteBtn.type = 'button';
         voteBtn.className = 'hotel-card-button';
         const isMine = myVotedHotelId === h.hotelId;
-        voteBtn.textContent = isMine ? '✓ Your vote' : 'Vote for this one';
+        voteBtn.textContent = isMine ? '✓ Deine Stimme' : 'Für dieses Hotel stimmen';
         if (isMine) voteBtn.classList.add('hotel-card-button-primary');
         voteBtn.addEventListener('click', () => voteForHotel(h.hotelId));
         actions.appendChild(voteBtn);
@@ -1020,7 +1077,7 @@ const icalDownloadUrl = buildICalDownloadUrl({
       const tally = document.createElement('span');
       tally.className = 'hotel-card-vote-tally';
       const count = (opts.voteTallies && opts.voteTallies[h.hotelId]) || 0;
-      tally.textContent = count + ' vote' + (count === 1 ? '' : 's');
+      tally.textContent = count + ' Stimme' + (count === 1 ? '' : 'n');
       actions.appendChild(tally);
 
       // Booking CTA button (Feature 4)
@@ -1059,7 +1116,7 @@ const icalDownloadUrl = buildICalDownloadUrl({
             : '';
         const guestsLabel =
           data && typeof data.guests === 'number'
-            ? ' · ' + data.guests + ' guest' + (data.guests === 1 ? '' : 's')
+            ? ' · ' + data.guests + ' ' + (data.guests === 1 ? 'Gast' : 'Gäste')
             : '';
         hotelMetaEl.textContent = destination.city + datesLabel + guestsLabel;
         hotelMetaEl.hidden = false;
@@ -1072,9 +1129,17 @@ const icalDownloadUrl = buildICalDownloadUrl({
 
       if (reason !== 'ok' || hotels.length === 0) {
         if (hotelStateEl && hotelStateText) {
-          hotelStateText.textContent =
-            hotelReasonMessage(reason || 'no_inventory') ||
-            'Hotel shortlist is empty — try again soon.';
+          // German fallback + a real Booking.com city-search deep link.
+          hotelStateText.innerHTML = '';
+          hotelStateText.appendChild(document.createTextNode(
+            (hotelReasonMessage(reason || 'no_inventory') ||
+              'Noch keine Hotelliste.') + ' '));
+          const a = document.createElement('a');
+          a.href = bookingCitySearchUrl();
+          a.target = '_blank'; a.rel = 'noopener noreferrer';
+          a.textContent = 'Auf Booking.com suchen →';
+          a.style.cssText = 'color:#0066cc;font-weight:700;text-decoration:none';
+          hotelStateText.appendChild(a);
           hotelStateEl.hidden = false;
         }
         return;

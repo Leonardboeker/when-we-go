@@ -23,23 +23,19 @@
   aria-labelledby="flight-options-title"
 >
   <div class="flight-options-header">
-    <h2 id="flight-options-title" class="flight-options-title">Flights for you</h2>
+    <h2 id="flight-options-title" class="flight-options-title">Flüge für euch</h2>
     <button
       type="button"
       class="flight-options-refresh"
       data-flights-refresh
-      disabled
+      hidden
     >
-      Refresh prices
+      Aktualisieren
     </button>
   </div>
 
-  {/* Phase 5: when provider.isReal === false, render a yellow striped DEMO
-      banner above the flight cards so participants know prices are mock. */}
-  <div class="flight-options-demo-banner" data-flights-demo-banner hidden>
-    <strong>📍 DEMO flight data</strong> — real provider not configured yet.
-    Prices are illustrative; use Google Flights / Skyscanner for actual booking.
-  </div>
+  {/* Deeplinks mode: no in-app prices, so the DEMO banner stays hidden. */}
+  <div class="flight-options-demo-banner" data-flights-demo-banner hidden></div>
 
   <p class="flight-options-meta" data-flights-meta hidden></p>
 
@@ -67,12 +63,12 @@
   <ul class="flight-options-list" data-flights-list hidden></ul>
 
   <details class="flight-options-more" data-flights-more hidden>
-    <summary>See all options</summary>
+    <summary>Alle Optionen</summary>
     <ul class="flight-options-rest" data-flights-rest></ul>
   </details>
 
   <p class="flight-options-disclaimer">
-    Doesn't include low-cost carriers — check Skyscanner separately for those.
+    Echte Live-Preise siehst du direkt bei Google Flights bzw. Skyscanner.
   </p>
 </section>
 
@@ -202,5 +198,63 @@
     margin: 12px 0 0 0;
     font-size: 11px;
     color: var(--color-on-surface-variant, #475569);
+  }
+  /* Real-deeplink card (replaces fake price cards) */
+  .flight-deeplink-card {
+    border: 1.5px solid var(--color-outline-variant, #cbd5e1);
+    border-radius: var(--radius-sm, 6px);
+    background: #fff;
+    padding: 16px;
+  }
+  .flight-deeplink-route {
+    font-family: var(--font-headline, 'Bricolage Grotesque', sans-serif);
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    color: var(--color-on-background, #0f172a);
+  }
+  .flight-deeplink-sub {
+    margin-top: 4px;
+    font-size: 13px;
+    color: var(--color-on-surface-variant, #475569);
+  }
+  .flight-deeplink-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+  }
+  .flight-deeplink-btn {
+    flex: 1 1 auto;
+    text-align: center;
+    padding: 10px 14px;
+    border: 1.5px solid var(--color-primary, #0066cc);
+    border-radius: var(--radius-sm, 6px);
+    background: #fff;
+    color: var(--color-primary, #0066cc);
+    font-family: var(--font-body, 'DM Sans', system-ui, sans-serif);
+    font-size: 14px;
+    font-weight: 700;
+    text-decoration: none;
+    transition: background 0.12s, color 0.12s;
+  }
+  .flight-deeplink-btn:hover { background: var(--color-primary-fixed, #cce0ff); }
+  .flight-deeplink-btn-primary {
+    background: var(--color-primary, #0066cc);
+    color: #fff;
+  }
+  .flight-deeplink-btn-primary:hover { background: #0052a3; color: #fff; }
+  .flight-deeplink-note {
+    padding: 14px 16px;
+    background: var(--color-surface-container-low, #eef4fb);
+    border-radius: var(--radius-sm, 6px);
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--color-on-surface-variant, #475569);
+  }
+  .flight-deeplink-note a {
+    color: var(--color-primary, #0066cc);
+    font-weight: 700;
+    text-decoration: none;
   }
 </style>
