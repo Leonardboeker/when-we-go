@@ -26,17 +26,16 @@ const { slug, organizerToken, apiBase } = Astro.props;
 
 <section class="cost-section" aria-label="Split costs" data-cost-panel hidden>
   <div class="cost-section-head">
-    <h2>Split costs</h2>
-    <span class="cost-section-hint" data-cost-hint>Loading…</span>
+    <h2>Kosten aufteilen</h2>
+    <span class="cost-section-hint" data-cost-hint>Lädt…</span>
   </div>
   <p class="cost-blurb">
-    Pre-fills based on the chosen hotel + each person's cheapest flight (once those phases ship).
-    Edit any amount inline, then export to pay-me-back JSON.
+    Vorbelegt anhand des gewählten Hotels + Flug pro Person. Beträge inline anpassen, dann zu pay-me-back exportieren.
   </p>
 
   <div class="cost-card" data-cost-card hidden>
     <div class="cost-hotel-line" data-cost-hotel-line hidden>
-      <strong>Chosen hotel:</strong>
+      <strong>Gewähltes Hotel:</strong>
       <span data-cost-hotel-name>—</span>
       <span data-cost-hotel-total></span>
     </div>
@@ -44,27 +43,25 @@ const { slug, organizerToken, apiBase } = Astro.props;
     <table class="cost-table">
       <thead>
         <tr>
-          <th scope="col">Participant</th>
+          <th scope="col">Person</th>
           <th scope="col" class="cost-num">Hotel</th>
-          <th scope="col" class="cost-num">Flight</th>
-          <th scope="col" class="cost-num">Other</th>
-          <th scope="col" class="cost-num">Total</th>
-          <th scope="col">Notes</th>
+          <th scope="col" class="cost-num">Flug</th>
+          <th scope="col" class="cost-num">Sonstiges</th>
+          <th scope="col" class="cost-num">Summe</th>
+          <th scope="col">Notiz</th>
         </tr>
       </thead>
       <tbody data-cost-rows></tbody>
     </table>
 
     <div class="cost-actions">
-      <span class="cost-save-state" data-cost-save>Saved.</span>
-      <button type="button" class="admin-button" data-cost-export>
-        Export to pay-me-back JSON
-      </button>
+      <span class="cost-save-state" data-cost-save>Gespeichert.</span>
+      <button type="button" class="admin-button" data-cost-export>Zu pay-me-back exportieren</button>
     </div>
   </div>
 
   <p class="cost-empty" data-cost-empty hidden>
-    Cost split is available only after the poll is closed.
+    Kosten-Aufteilung gibt es erst nach Ende der Abstimmung.
   </p>
 </section>
 
@@ -88,7 +85,7 @@ const { slug, organizerToken, apiBase } = Astro.props;
       >×</button>
     </div>
     <p class="cost-modal-blurb" data-cost-modal-blurb>
-      Paste this into your pay-me-back deployment's <code>data/debtors.json</code>, then run <code>npm run build</code>.
+      Füg das in die <code>data/debtors.json</code> deines pay-me-back-Projekts ein, dann <code>npm run build</code>.
     </p>
     <textarea
       class="cost-modal-textarea"
@@ -97,17 +94,13 @@ const { slug, organizerToken, apiBase } = Astro.props;
       spellcheck="false"
     ></textarea>
     <div class="cost-modal-actions">
-      <button type="button" class="admin-button" data-cost-modal-copy>
-        Copy to clipboard
-      </button>
+      <button type="button" class="admin-button" data-cost-modal-copy>In Zwischenablage kopieren</button>
       <a
         class="admin-button cost-modal-link"
         href="https://github.com/Leonardboeker/pay-me-back#quick-start"
         target="_blank"
         rel="noreferrer noopener"
-      >
-        Open pay-me-back setup guide ↗
-      </a>
+      >pay-me-back Anleitung öffnen ↗</a>
     </div>
   </div>
 </div>
@@ -187,10 +180,9 @@ const { slug, organizerToken, apiBase } = Astro.props;
       }
       const n = participantsCache.length;
       setHint(
-        n + ' participant' + (n === 1 ? '' : 's') +
-        (data.defaultsApplied ? ' — using defaults (no overrides saved yet)' : ' — overrides saved')
+        n + ' Person' + (n === 1 ? '' : 'en') + (data.defaultsApplied ? ' — Standardwerte' : ' — angepasst')
       );
-      setSaveState('Saved.');
+      setSaveState('Gespeichert.');
     }
 
     function collectSplits() {
@@ -234,18 +226,18 @@ const { slug, organizerToken, apiBase } = Astro.props;
         const data = await res.json();
         render(data);
       } catch (err) {
-        setHint('Load failed: ' + (err && err.message));
+        setHint('Laden fehlgeschlagen: ' + (err && err.message));
         if (cardEl) cardEl.hidden = true;
         if (emptyEl) {
           emptyEl.hidden = false;
-          emptyEl.textContent = 'Could not load cost split: ' + (err && err.message);
+          emptyEl.textContent = 'Konnte Kosten nicht laden: ' + (err && err.message);
         }
       }
     }
 
     async function persistSplits() {
       const splits = collectSplits();
-      setSaveState('Saving…');
+      setSaveState('Speichert…');
       try {
         const url = apiBase + '/api/admin/cost-split?slug=' + encodeURIComponent(slug);
         const res = await fetch(url, {
@@ -258,15 +250,15 @@ const { slug, organizerToken, apiBase } = Astro.props;
           body: JSON.stringify({ splits }),
         });
         if (!res.ok) throw new Error('HTTP ' + res.status);
-        setSaveState('Saved.');
+        setSaveState('Gespeichert.');
       } catch (err) {
-        setSaveState('Save failed: ' + (err && err.message));
+        setSaveState('Speichern fehlgeschlagen: ' + (err && err.message));
       }
     }
 
     function scheduleSave() {
       if (saveTimer) clearTimeout(saveTimer);
-      setSaveState('Editing…');
+      setSaveState('Bearbeitet…');
       saveTimer = setTimeout(persistSplits, SAVE_DEBOUNCE_MS);
     }
 
@@ -297,7 +289,7 @@ const { slug, organizerToken, apiBase } = Astro.props;
         if (!res.ok) throw new Error('HTTP ' + res.status);
         data = await res.json();
       } catch (err) {
-        alert('Export failed: ' + (err && err.message));
+        alert('Export fehlgeschlagen: ' + (err && err.message));
         return;
       }
       const debtors = (data && data.debtors) || [];
@@ -308,7 +300,7 @@ const { slug, organizerToken, apiBase } = Astro.props;
         const meta = (data.destination ? data.destination : '') +
           (data.dateLabel ? ' — ' + data.dateLabel : '');
         modalBlurb.textContent =
-          'Export for ' + meta + '. Paste into pay-me-back\'s data/debtors.json, then npm run build.';
+          'Export für ' + meta + '. In pay-me-back data/debtors.json einfügen, dann npm run build.';
       }
       modal.hidden = false;
     }
@@ -328,8 +320,8 @@ const { slug, organizerToken, apiBase } = Astro.props;
       modalCopy.addEventListener('click', async () => {
         try {
           await navigator.clipboard.writeText(modalTextarea.value);
-          modalCopy.textContent = 'Copied!';
-          setTimeout(() => { modalCopy.textContent = 'Copy to clipboard'; }, 1600);
+          modalCopy.textContent = 'Kopiert!';
+          setTimeout(() => { modalCopy.textContent = 'In Zwischenablage kopieren'; }, 1600);
         } catch {
           // Fallback: select-all so the user can ctrl+c.
           modalTextarea.focus();
@@ -387,8 +379,9 @@ const { slug, organizerToken, apiBase } = Astro.props;
   }
   .cost-card {
     padding: 16px 18px;
-    background: var(--color-surface-container-low);
-    border: 2px solid var(--color-outline);
+    background: #fff;
+    border-radius: var(--radius-lg, 16px);
+    box-shadow: 0 2px 10px rgba(15, 23, 42, 0.07), 0 1px 3px rgba(15, 23, 42, 0.05);
   }
   .cost-hotel-line {
     margin: 0 0 12px;
@@ -487,8 +480,8 @@ const { slug, organizerToken, apiBase } = Astro.props;
     display: flex;
     flex-direction: column;
     background: var(--color-surface, #fff);
-    border: 2px solid var(--color-on-background);
-    box-shadow: 6px 6px 0 var(--color-on-background);
+    border-radius: var(--radius-lg, 16px);
+    box-shadow: 0 12px 40px rgba(15, 23, 42, 0.2);
     padding: 18px 20px;
   }
   .cost-modal-head {
