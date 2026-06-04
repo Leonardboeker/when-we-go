@@ -99,6 +99,12 @@ const icalDownloadUrl = buildICalDownloadUrl({
       >Telegram</a>
     </div>
 
+    {/* #9 — Web Push opt-in (hidden until we confirm VAPID is configured). */}
+    <div id="push-optin" class="push-optin" hidden>
+      <button type="button" id="push-btn" class="push-btn">🔔 Benachrichtigungen aktivieren</button>
+      <span id="push-status" class="push-status"></span>
+    </div>
+
     {/* ── Section: Dates (default tab) ─────────────────────────────── */}
     <div class="page-section" data-section="dates">
       {/* Post-close summary banner */}
@@ -423,6 +429,81 @@ const icalDownloadUrl = buildICalDownloadUrl({
       }
     }
     if (commentForm) commentForm.addEventListener('submit', submitComment);
+
+    // ── #9: Web Push opt-in ───────────────────────────────────────────
+    // The whole block is a no-op unless the server reports VAPID is
+    // configured AND the browser supports push + service workers.
+    const pushOptin = document.getElementById('push-optin');
+    const pushBtn = document.getElementById('push-btn');
+    const pushStatus = document.getElementById('push-status');
+
+    function urlBase64ToUint8Array(base64String) {
+      const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+      const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+      const raw = atob(base64);
+      const arr = new Uint8Array(raw.length);
+      for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+      return arr;
+    }
+
+    async function initPush() {
+      if (!pushOptin || !pushBtn) return;
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+      // Ask the server for the VAPID public key — 503 means push is off.
+      let publicKey = null;
+      try {
+        const res = await fetch(apiBase + '/api/push/key', { headers: { Accept: 'application/json' } });
+        if (!res.ok) return; // 503 not_configured → stay hidden
+        const j = await res.json();
+        if (!j.ok || !j.publicKey) return;
+        publicKey = j.publicKey;
+      } catch (e) { return; }
+
+      pushOptin.hidden = false;
+      // Already granted + subscribed? Reflect that.
+      if (Notification.permission === 'granted') {
+        try {
+          const reg = await navigator.serviceWorker.getRegistration();
+          const existing = reg && (await reg.pushManager.getSubscription());
+          if (existing) {
+            pushBtn.disabled = true;
+            pushBtn.textContent = '🔔 Aktiviert ✓';
+            return;
+          }
+        } catch (e) { /* fall through to enable button */ }
+      }
+
+      pushBtn.addEventListener('click', async () => {
+        pushBtn.disabled = true;
+        if (pushStatus) pushStatus.textContent = 'Aktiviere…';
+        try {
+          const reg = await navigator.serviceWorker.register('/sw.js');
+          await navigator.serviceWorker.ready;
+          const perm = await Notification.requestPermission();
+          if (perm !== 'granted') {
+            if (pushStatus) pushStatus.textContent = 'Im Browser blockiert.';
+            pushBtn.disabled = false;
+            return;
+          }
+          const sub = await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(publicKey),
+          });
+          const res = await fetch(apiBase + '/api/push/subscribe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ slug, token, subscription: sub.toJSON() }),
+          });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          pushBtn.textContent = '🔔 Aktiviert ✓';
+          if (pushStatus) pushStatus.textContent = '';
+        } catch (err) {
+          if (pushStatus) pushStatus.textContent = 'Fehlgeschlagen.';
+          pushBtn.disabled = false;
+        }
+      });
+    }
+    initPush();
 
     /** @param {string} msg @param {'saving'|'saved'|'error'|''} [kind] */
     function setStatus(msg, kind) {
@@ -1840,6 +1921,30 @@ const icalDownloadUrl = buildICalDownloadUrl({
     border: 1.5px solid var(--color-outline-variant, #cbd5e1);
     border-radius: var(--radius-lg, 16px);
   }
+  /* #9 — Web Push opt-in */
+  .push-optin {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 0 16px;
+    flex-wrap: wrap;
+  }
+  .push-btn {
+    padding: 8px 14px;
+    border: 1.5px solid var(--color-primary, #0066cc);
+    border-radius: 99px;
+    background: #fff;
+    color: var(--color-primary, #0066cc);
+    font-family: var(--font-body, 'DM Sans', system-ui, sans-serif);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.12s;
+  }
+  .push-btn:hover:not(:disabled) { background: var(--color-primary-fixed, #cce0ff); }
+  .push-btn:disabled { opacity: 0.7; cursor: default; }
+  .push-status { font-size: 12px; color: var(--color-on-surface-variant, #475569); }
+
   /* #6 — date comments */
   .comments-section {
     margin: 16px 0 0;

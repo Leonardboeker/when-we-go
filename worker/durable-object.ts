@@ -38,6 +38,12 @@ export interface Env {
   // (deterministic per-destination evergreen lookup). When set, the real
   // ClaudeActivityProvider drives structured-output calls to Haiku.
   WHENWEGO_ANTHROPIC_API_KEY?: string;
+  // #9 — Web Push (VAPID). Both optional: when EITHER is missing the push
+  // pipeline is fully off (subscribe endpoint 503s, no UI prompt, no sends).
+  // Generate with: npx web-push generate-vapid-keys
+  WHENWEGO_VAPID_PUBLIC_KEY?: string;
+  WHENWEGO_VAPID_PRIVATE_KEY?: string;
+  WHENWEGO_VAPID_SUBJECT?: string;
   // Phase 5 real provider — Kiwi.com Tequila (free tier, no CC needed).
   // Sign up: https://tequila.kiwi.com/portal/login
   // When unset, getFlightProvider() falls back to MockFlightProvider.
@@ -187,6 +193,44 @@ export class WhenWeGoPollDO extends DurableObject {
         created_at  INTEGER NOT NULL
       );
     `);
+    // #9 — Web Push subscriptions. One row per browser endpoint (PRIMARY KEY),
+    // associated with the participant token. Stores the PushSubscription JSON.
+    this.sql.exec(`
+      CREATE TABLE IF NOT EXISTS push_subscriptions (
+        endpoint    TEXT PRIMARY KEY,
+        token       TEXT NOT NULL,
+        sub_json    TEXT NOT NULL,
+        created_at  INTEGER NOT NULL
+      );
+    `);
+  }
+
+  // #9 — store/replace a push subscription (idempotent on endpoint).
+  addPushSubscription(token: string, endpoint: string, subJson: string): void {
+    this.sql.exec(
+      `INSERT INTO push_subscriptions (endpoint, token, sub_json, created_at)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(endpoint) DO UPDATE SET
+         token = excluded.token, sub_json = excluded.sub_json`,
+      endpoint,
+      token,
+      subJson,
+      Date.now()
+    );
+  }
+
+  // #9 — all subscriptions for this poll (for fan-out on close/reminders).
+  getPushSubscriptions(): Array<{ endpoint: string; token: string; subJson: string }> {
+    return (
+      this.sql
+        .exec(`SELECT endpoint, token, sub_json FROM push_subscriptions`)
+        .toArray() as Array<{ endpoint: string; token: string; sub_json: string }>
+    ).map((r) => ({ endpoint: r.endpoint, token: r.token, subJson: r.sub_json }));
+  }
+
+  // #9 — drop a dead subscription (push service returned 404/410).
+  removePushSubscription(endpoint: string): void {
+    this.sql.exec(`DELETE FROM push_subscriptions WHERE endpoint = ?`, endpoint);
   }
 
   // #6 — add a date comment. Returns the new comment's id.
@@ -445,6 +489,8 @@ export class WhenWeGoPollDO extends DurableObject {
       'reminders_sent',
       'proposal_cache',
       'cost_split',
+      'date_comments',
+      'push_subscriptions',
     ];
     const removed: Record<string, number> = {};
     for (const t of tables) {
