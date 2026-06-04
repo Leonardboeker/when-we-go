@@ -125,21 +125,21 @@ const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     display: grid;
     grid-template-columns: repeat(7, 1fr);
     gap: 4px;
-    padding: 0 0 8px;
-    border-bottom: 2px solid var(--color-on-background);
+    padding: 0 0 6px;
+    border-bottom: 1px solid var(--color-outline-variant, #cbd5e1);
     margin-bottom: 8px;
   }
   .calendar-weekday {
-    font-family: var(--font-label, 'JetBrains Mono', monospace);
+    font-family: var(--font-body, 'DM Sans', system-ui, sans-serif);
     font-size: 11px;
-    font-weight: 700;
+    font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.06em;
     text-align: center;
-    color: var(--color-on-surface-variant);
+    color: var(--color-on-surface-variant, #475569);
   }
   .calendar-weekday.is-weekend {
-    color: var(--color-primary);
+    color: var(--color-secondary, #c24b0a);
   }
   .calendar-rows {
     display: flex;
@@ -150,16 +150,16 @@ const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     position: sticky;
     top: 0;
     z-index: 2;
-    background: var(--color-surface-container-high);
-    border-top: 2px solid var(--color-on-background);
-    border-bottom: 2px solid var(--color-on-background);
-    padding: 6px 10px;
-    margin: 8px 0 4px;
-    font-family: var(--font-label, 'JetBrains Mono', monospace);
-    font-size: 12px;
-    font-weight: 800;
+    background: var(--color-background, #f0f4f8);
+    border-bottom: 1px solid var(--color-outline-variant, #cbd5e1);
+    padding: 8px 0 6px;
+    margin: 12px 0 6px;
+    font-family: var(--font-body, 'DM Sans', system-ui, sans-serif);
+    font-size: 13px;
+    font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.12em;
+    letter-spacing: 0.06em;
+    color: var(--color-on-surface-variant, #475569);
   }
   .calendar-week {
     display: grid;
@@ -169,18 +169,19 @@ const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   .calendar-cell {
     aspect-ratio: 1 / 1;
     min-height: 40px;
-    border: 2px solid var(--color-outline);
+    border: 1.5px solid var(--color-outline-variant);
+    border-radius: 8px;
     background: var(--color-surface-container-lowest);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-family: var(--font-label, 'JetBrains Mono', monospace);
-    font-size: 13px;
-    font-weight: 700;
+    font-family: var(--font-body, 'DM Sans', system-ui, sans-serif);
+    font-size: 14px;
+    font-weight: 600;
     color: var(--color-on-background);
     cursor: not-allowed;
     padding: 0;
-    transition: transform 0.1s ease, background 0.1s ease;
+    transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease;
   }
   .calendar-cell-pad {
     visibility: hidden;
@@ -197,9 +198,9 @@ const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     border-color: var(--color-outline-variant);
   }
   .calendar-cell.is-today {
-    border: 2px solid var(--color-primary);
-    box-shadow: inset 0 0 0 2px var(--color-primary);
-    color: var(--color-primary);
+    border: 2px solid var(--color-secondary, #c24b0a);
+    color: var(--color-secondary, #c24b0a);
+    font-weight: 800;
   }
   .calendar-cell[disabled] {
     cursor: not-allowed;
@@ -210,10 +211,13 @@ const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     position: relative;
   }
   .calendar-cell-day:hover:not([disabled]):not(.cell-readonly) {
-    transform: translateY(-1px);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 102, 204, 0.15);
+    border-color: var(--color-primary, #0066cc);
   }
   .calendar-cell-day:active:not([disabled]):not(.cell-readonly) {
     transform: translateY(0);
+    box-shadow: none;
   }
   .calendar-cell-badge {
     position: absolute;
@@ -224,43 +228,33 @@ const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     line-height: 1;
     pointer-events: none;
   }
-  /* Vote state visuals — JS toggles cell-yes / cell-maybe / cell-no / cell-unset */
+  /* Vote state visuals */
   .cell-yes {
-    background: var(--color-primary);
-    color: var(--color-on-primary, #fff);
-    border-color: var(--color-primary);
-  }
-  /* Voted states override the weekend background cleanly. */
-  .cell-yes.is-weekend,
-  .cell-maybe.is-weekend,
-  .cell-no.is-weekend {
-    background-image: none;
-  }
-  .cell-maybe.is-weekend {
-    background-image: repeating-linear-gradient(
-      -45deg,
-      var(--color-surface-container) 0 4px,
-      var(--color-surface-container-high) 4px 8px
-    );
+    background: var(--color-primary, #0066cc);
+    color: #fff;
+    border-color: var(--color-primary, #0066cc);
+    box-shadow: 0 1px 4px rgba(0, 102, 204, 0.3);
   }
   .cell-maybe {
-    background-image: repeating-linear-gradient(
-      -45deg,
-      var(--color-surface-container) 0 4px,
-      var(--color-surface-container-high) 4px 8px
-    );
-    color: var(--color-on-background);
-    border-color: var(--color-on-background);
+    background: var(--color-primary-fixed, #cce0ff);
+    color: var(--color-primary, #0066cc);
+    border-color: var(--color-primary, #0066cc);
+    border-width: 2px;
   }
   .cell-no {
-    background: var(--color-surface-container-lowest);
-    color: var(--color-on-surface-variant);
-    border-color: var(--color-outline);
-    opacity: 0.55;
+    background: var(--color-surface-container-low, #eef4fb);
+    color: var(--color-outline, #94a3b8);
+    border-color: var(--color-outline-variant, #cbd5e1);
+    opacity: 0.6;
     text-decoration: line-through;
+    text-decoration-color: var(--color-outline, #94a3b8);
   }
   .cell-unset {
-    background: var(--color-surface-container-lowest);
+    background: #fff;
+  }
+  /* Weekend override — solid warm tint, no stripes */
+  .cell-yes.is-weekend, .cell-maybe.is-weekend, .cell-no.is-weekend {
+    background-image: none;
   }
   /* Post-close overlap badges */
   .cell-perfect .calendar-cell-badge::after { content: '✓'; color: var(--color-primary); }
@@ -271,36 +265,36 @@ const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     pointer-events: none;
   }
 
-  /* ── How-it-works bar (sits above the weekday header) ── */
+  /* ── How-it-works bar ── */
   .calendar-how-it-works {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 6px 10px;
-    padding: 8px 10px;
+    padding: 8px 12px;
     margin-bottom: 10px;
-    background: var(--color-surface-container-high);
-    border: 2px solid var(--color-on-background);
-    font-family: var(--font-label, 'JetBrains Mono', monospace);
+    background: var(--color-surface-container-low, #eef4fb);
+    border-radius: var(--radius-sm, 6px);
+    font-family: var(--font-body, 'DM Sans', system-ui, sans-serif);
     font-size: 11px;
     color: var(--color-on-surface-variant);
   }
   .how-label {
-    font-weight: 800;
+    font-weight: 700;
     font-size: 11px;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--color-on-background);
+    letter-spacing: 0.07em;
+    color: var(--color-on-background, #0f172a);
   }
   .how-sep {
-    color: var(--color-outline);
+    color: var(--color-outline-variant, #cbd5e1);
   }
   .how-hint {
     margin-left: auto;
     font-size: 10px;
-    opacity: 0.7;
+    opacity: 0.6;
     text-transform: uppercase;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.05em;
   }
   .calendar-legend {
     display: inline-flex;
@@ -320,12 +314,13 @@ const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     display: inline-block;
     width: 12px;
     height: 12px;
-    border: 1.5px solid var(--color-on-background);
+    border-radius: 3px;
+    border: 1.5px solid transparent;
     flex-shrink: 0;
   }
-  .swatch-yes { background: var(--color-primary); }
-  .swatch-maybe { background-image: repeating-linear-gradient(-45deg, var(--color-surface-container) 0 3px, var(--color-surface-container-high) 3px 6px); }
-  .swatch-no { background: var(--color-surface-container-lowest); opacity: 0.55; }
+  .swatch-yes { background: var(--color-primary, #0066cc); }
+  .swatch-maybe { background: var(--color-primary-fixed, #cce0ff); border-color: var(--color-primary, #0066cc); }
+  .swatch-no { background: var(--color-surface-container-low, #eef4fb); opacity: 0.6; border-color: var(--color-outline-variant, #cbd5e1); }
 
   /* ── Status line (bottom) ── */
   .calendar-status {
@@ -344,14 +339,12 @@ const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     color: var(--color-primary);
   }
 
-  /* Desktop polish: wider cells, slightly bigger type. */
   @media (min-width: 640px) {
     .calendar-cell {
-      min-height: 56px;
+      min-height: 52px;
       font-size: 15px;
+      border-radius: 10px;
     }
-    .calendar-weekday {
-      font-size: 12px;
-    }
+    .calendar-weekday { font-size: 12px; }
   }
 </style>

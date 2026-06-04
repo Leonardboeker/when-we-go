@@ -1,7 +1,8 @@
 ---
 // src/components/PollHeader.astro
-// Greeting + countdown for the participant page. Static (Phase 1).
-// Phase 2 will swap the day-count to a live ticker.
+// Modern card header — matches Stitch "Trip Planner Modern" design.
+// White card + shadow, destination pill, large Bricolage headline,
+// orange rounded countdown badge.
 import { daysUntil } from '../lib/calendar';
 
 interface Props {
@@ -15,44 +16,43 @@ const { participantName, title, destination, pollCloseAt } = Astro.props;
 
 const days = daysUntil(pollCloseAt);
 const closed = days === 0;
-const closeDateLabel = new Date(pollCloseAt).toLocaleString('en-GB', {
-  weekday: 'short',
+const closeDateShort = new Date(pollCloseAt).toLocaleString('en-GB', {
   day: '2-digit',
   month: 'short',
   year: 'numeric',
-  hour: '2-digit',
-  minute: '2-digit',
-  timeZoneName: 'short',
 });
 ---
 
-<header class="poll-header pixel-border-shadow">
-  <p class="poll-header-greeting">
-    Hey <strong>{participantName}</strong> —
-  </p>
+<header class="poll-header">
+  {/* Destination pill */}
+  {destination && (
+    <div class="poll-header-pill">
+      <span class="poll-header-pill-dot"></span>
+      {destination}
+    </div>
+  )}
+
+  {/* Greeting + headline */}
+  <p class="poll-header-greeting">Hey <strong>{participantName}</strong></p>
   <h1 class="poll-header-title">
     {destination
-      ? <>when can you come to <span class="poll-header-dest">{destination}</span>?</>
+      ? <>when can you come?</>
       : <>when can you join <span class="poll-header-dest">{title}</span>?</>}
   </h1>
 
+  {/* Poll close meta */}
   <p class="poll-header-meta">
-    <span class="poll-header-meta-label">Poll closes:</span>
-    <span class="poll-header-meta-value">{closeDateLabel}</span>
+    Poll closes {closeDateShort}
   </p>
 
-  <div class={['poll-countdown', closed && 'poll-countdown-closed'].filter(Boolean).join(' ')}>
+  {/* Countdown badge */}
+  <div class={['poll-countdown', closed && 'poll-countdown--closed'].filter(Boolean).join(' ')}>
     {closed ? (
-      <>
-        <span class="poll-countdown-num">CLOSED</span>
-        <span class="poll-countdown-label">— poll has ended</span>
-      </>
+      <span class="poll-countdown-label">Poll closed</span>
     ) : (
       <>
         <span class="poll-countdown-num">{days}</span>
-        <span class="poll-countdown-label">
-          day{days === 1 ? '' : 's'} left to vote
-        </span>
+        <span class="poll-countdown-label">day{days === 1 ? '' : 's'} left to vote</span>
       </>
     )}
   </div>
@@ -60,74 +60,99 @@ const closeDateLabel = new Date(pollCloseAt).toLocaleString('en-GB', {
 
 <style>
   .poll-header {
-    background: var(--color-surface-container);
-    padding: 20px 24px;
-    margin: 0 0 24px;
-    color: var(--color-on-background);
-  }
-  .poll-header-greeting {
-    font-family: var(--font-label, 'JetBrains Mono', monospace);
-    font-size: 14px;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    margin: 0 0 4px;
-    color: var(--color-on-surface-variant);
-  }
-  .poll-header-greeting strong {
-    color: var(--color-on-background);
-    font-weight: 800;
-  }
-  .poll-header-title {
-    font-family: var(--font-headline, 'Syne', sans-serif);
-    font-size: clamp(22px, 6vw, 32px);
-    font-weight: 700;
-    line-height: 1.15;
+    background: var(--color-surface-container-lowest, #fff);
+    border-radius: var(--radius-lg, 16px);
+    box-shadow: 0 2px 12px rgba(15, 23, 42, 0.08), 0 1px 3px rgba(15, 23, 42, 0.06);
+    padding: 20px 20px 20px;
     margin: 0 0 16px;
-    color: var(--color-on-background);
   }
-  .poll-header-dest {
-    color: var(--color-primary);
-  }
-  .poll-header-meta {
-    font-family: var(--font-body, 'Space Mono', monospace);
+
+  /* Destination pill */
+  .poll-header-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    background: var(--color-primary-fixed, #cce0ff);
+    color: var(--color-on-primary-container, #001e42);
+    border-radius: 99px;
+    font-family: var(--font-sans, 'DM Sans', system-ui, sans-serif);
     font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
     margin: 0 0 12px;
-    color: var(--color-on-surface-variant);
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px 10px;
   }
-  .poll-header-meta-label {
+  .poll-header-pill-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--color-primary, #0066cc);
+    flex-shrink: 0;
+  }
+
+  /* Greeting */
+  .poll-header-greeting {
+    font-family: var(--font-body, 'DM Sans', system-ui, sans-serif);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--color-on-surface-variant, #475569);
+    margin: 0 0 4px;
     text-transform: uppercase;
     letter-spacing: 0.06em;
+  }
+  .poll-header-greeting strong {
+    color: var(--color-on-background, #0f172a);
     font-weight: 700;
   }
-  .poll-header-meta-value {
-    color: var(--color-on-background);
+
+  /* Headline */
+  .poll-header-title {
+    font-family: var(--font-headline, 'Bricolage Grotesque', 'Syne', sans-serif);
+    font-size: clamp(24px, 6vw, 34px);
+    font-weight: 800;
+    line-height: 1.1;
+    margin: 0 0 10px;
+    color: var(--color-on-background, #0f172a);
+    letter-spacing: -0.02em;
   }
+  .poll-header-dest {
+    color: var(--color-primary, #0066cc);
+  }
+
+  /* Close date meta */
+  .poll-header-meta {
+    font-family: var(--font-body, 'DM Sans', system-ui, sans-serif);
+    font-size: 13px;
+    color: var(--color-on-surface-variant, #475569);
+    margin: 0 0 14px;
+  }
+
+  /* Countdown badge */
   .poll-countdown {
     display: inline-flex;
     align-items: baseline;
-    gap: 8px;
-    padding: 8px 14px;
-    background: var(--color-primary-container);
-    color: var(--color-on-primary-container);
-    border: 3px solid var(--color-on-background);
-    box-shadow: 3px 3px 0 var(--color-on-background);
-    font-family: var(--font-label, 'JetBrains Mono', monospace);
+    gap: 6px;
+    padding: 8px 16px;
+    background: var(--color-primary, #0066cc);
+    color: #fff;
+    border-radius: var(--radius-sm, 6px);
+    font-family: var(--font-body, 'DM Sans', system-ui, sans-serif);
   }
   .poll-countdown-num {
-    font-size: 22px;
+    font-size: 20px;
     font-weight: 800;
-    letter-spacing: 0.02em;
+    line-height: 1;
+    letter-spacing: -0.01em;
   }
   .poll-countdown-label {
-    font-size: 12px;
+    font-size: 13px;
+    font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.04em;
+    line-height: 1;
   }
-  .poll-countdown-closed {
-    background: var(--color-surface-container-highest);
-    color: var(--color-on-surface);
+  .poll-countdown--closed {
+    background: var(--color-surface-container-high, #c9daf0);
+    color: var(--color-on-surface-variant, #475569);
   }
 </style>
