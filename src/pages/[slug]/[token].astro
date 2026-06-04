@@ -81,6 +81,23 @@ const icalDownloadUrl = buildICalDownloadUrl({
       pollCloseAt={poll.pollCloseAt}
     />
 
+    {/* Feature 9: Share buttons */}
+    <div class="share-buttons">
+      <span class="share-label">Teilen:</span>
+      <a
+        class="share-btn share-btn-whatsapp"
+        href={`https://wa.me/?text=${encodeURIComponent(`Hey! Wann hast du Zeit für ${poll.destination ?? poll.title}? Abstimm hier: ${publicSiteUrl}/${poll.slug}/${participant.token}`)}`}
+        target="_blank"
+        rel="noopener noreferrer"
+      >WhatsApp</a>
+      <a
+        class="share-btn share-btn-telegram"
+        href={`https://t.me/share/url?url=${encodeURIComponent(`${publicSiteUrl}/${poll.slug}/${participant.token}`)}&text=${encodeURIComponent(`Hey! Wann hast du Zeit für ${poll.destination ?? poll.title}?`)}`}
+        target="_blank"
+        rel="noopener noreferrer"
+      >Telegram</a>
+    </div>
+
     {/* ── Section: Dates (default tab) ─────────────────────────────── */}
     <div class="page-section" data-section="dates">
       {/* Post-close summary banner */}
@@ -147,8 +164,11 @@ const icalDownloadUrl = buildICalDownloadUrl({
 
     /** @type {Record<string, 'unset'|'yes'|'maybe'|'no'>} */
     const voteState = Object.create(null);
+    /** Last known server vote state for change detection (live updates) */
+    const serverVoteSnapshot = Object.create(null);
     let closed = false;
     let saveTimer = null;
+    let pollInterval = null;
     /** @type {AbortController | null} */
     let inflightAbort = null;
 
@@ -294,8 +314,8 @@ const icalDownloadUrl = buildICalDownloadUrl({
       }, 2400);
     }
 
-    /** @param {HTMLButtonElement} cell @param {string} state */
-    function applyCellClass(cell, state) {
+    /** @param {HTMLButtonElement} cell @param {string} state @param {boolean} [animate] */
+    function applyCellClass(cell, state, animate) {
       for (const s of STATES) cell.classList.remove(CLASS_PREFIX + s);
       cell.classList.add(CLASS_PREFIX + state);
       cell.dataset.state = state;
@@ -303,6 +323,12 @@ const icalDownloadUrl = buildICalDownloadUrl({
         'aria-label',
         cell.dataset.date + ' — ' + state + ' (tap to change)'
       );
+      if (animate) {
+        cell.classList.remove('cell-updated');
+        // Force reflow to restart animation
+        void cell.offsetWidth;
+        cell.classList.add('cell-updated');
+      }
     }
 
     /** @param {HTMLButtonElement} cell @param {string|null} tier */
@@ -430,11 +456,14 @@ const icalDownloadUrl = buildICalDownloadUrl({
       }
 
       for (const v of data.votes || []) {
+        const prev = serverVoteSnapshot[v.date];
+        const changed = prev !== undefined && prev !== v.state && voteState[v.date] === prev;
         voteState[v.date] = v.state;
+        serverVoteSnapshot[v.date] = v.state;
         const cell = grid.querySelector(
           '.calendar-cell-day[data-date="' + v.date + '"]'
         );
-        if (cell) applyCellClass(cell, v.state);
+        if (cell) applyCellClass(cell, v.state, changed);
       }
       if (closed) {
         markReadOnly();
@@ -454,6 +483,17 @@ const icalDownloadUrl = buildICalDownloadUrl({
           renderSummaryBanner(overlap);
           renderAddToCalendarButtons(overlap);
         }
+        // Feature 2: add red dot for any date with at least one "no" vote
+        if (data.overlap && data.overlap.perDate) {
+          const perDate = data.overlap.perDate;
+          const allCells = grid.querySelectorAll('.calendar-cell-day');
+          allCells.forEach((cell) => {
+            const d = cell.dataset.date;
+            if (!d || !perDate[d]) return;
+            const hasNo = Object.values(perDate[d]).some((s) => s === 'no');
+            if (hasNo) cell.classList.add('cell-has-no');
+          });
+        }
         setStatus('poll closed');
         // Phase 5-7: load trip content (non-blocking).
         loadFlights(false);
@@ -463,6 +503,83 @@ const icalDownloadUrl = buildICalDownloadUrl({
         if (typeof window.__switchToTripTab === 'function') {
           window.__switchToTripTab(true);
         }
+      } else {
+        // Feature 7: Best week highlight (only when poll is open)
+        highlightBestWeek();
+      }
+
+      // Feature 8: participant progress indicator
+      renderParticipantProgress(data);
+    }
+
+    /** Feature 7: find the Mon-Sun week with the most "yes" votes and highlight it */
+    function highlightBestWeek() {
+      // Clear previous highlights
+      grid.querySelectorAll('.cell-best-week').forEach((c) => c.classList.remove('cell-best-week'));
+
+      const yesDates = Object.keys(voteState).filter((d) => voteState[d] === 'yes');
+      if (yesDates.length < 3) return;
+
+      // Group yes-dates by week (Mon-Sun)
+      const weekCounts = new Map();
+      const weekDates = new Map();
+      for (const d of yesDates) {
+        const dt = new Date(d + 'T00:00:00Z');
+        const dow = (dt.getUTCDay() + 6) % 7; // 0=Mon, 6=Sun
+        const monday = new Date(dt);
+        monday.setUTCDate(dt.getUTCDate() - dow);
+        const key = monday.toISOString().slice(0, 10);
+        weekCounts.set(key, (weekCounts.get(key) || 0) + 1);
+        if (!weekDates.has(key)) weekDates.set(key, []);
+        weekDates.get(key).push(d);
+      }
+
+      let bestKey = null;
+      let bestCount = 0;
+      for (const [k, count] of weekCounts) {
+        if (count > bestCount) { bestCount = count; bestKey = k; }
+      }
+
+      if (!bestKey || bestCount < 4) return;
+
+      const bestDatesSet = new Set(weekDates.get(bestKey));
+      grid.querySelectorAll('.calendar-cell-day').forEach((cell) => {
+        if (bestDatesSet.has(cell.dataset.date)) cell.classList.add('cell-best-week');
+      });
+
+      // Show hint text
+      const existing = document.getElementById('best-week-hint');
+      if (existing) existing.remove();
+      const dates = [...bestDatesSet].sort();
+      if (dates.length > 0) {
+        const hint = document.createElement('p');
+        hint.id = 'best-week-hint';
+        hint.className = 'best-week-hint';
+        hint.textContent = '📅 Dein Top-Termin: ' + dates[0] + ' → ' + dates[dates.length - 1];
+        const calStatus = grid.querySelector('.calendar-status');
+        if (calStatus) grid.insertBefore(hint, calStatus);
+        else grid.appendChild(hint);
+      }
+    }
+
+    /** Feature 8: show participant vote progress */
+    function renderParticipantProgress(data) {
+      const progressEl = document.getElementById('participant-progress');
+      if (!progressEl) return;
+      // Use voterStatus if available (from /api/poll history). Fall back to
+      // the poll.participantCount + viewer.voteCount we always have.
+      const voterStatus = data.voterStatus || null;
+      if (voterStatus && Array.isArray(voterStatus)) {
+        const total = voterStatus.length;
+        const voted = voterStatus.filter((v) => v.voteCount > 0).length;
+        progressEl.textContent = voted + ' von ' + total + ' haben abgestimmt';
+        progressEl.hidden = false;
+      } else if (data.poll && data.poll.participantCount) {
+        // Minimal fallback: we know the viewer's vote count from data.viewer
+        const total = data.poll.participantCount;
+        const viewerVoted = data.viewer && data.viewer.voteCount > 0 ? 1 : 0;
+        progressEl.textContent = viewerVoted + ' von ' + total + ' haben abgestimmt (min.)';
+        progressEl.hidden = false;
       }
     }
 
@@ -822,14 +939,14 @@ const icalDownloadUrl = buildICalDownloadUrl({
       tally.textContent = count + ' vote' + (count === 1 ? '' : 's');
       actions.appendChild(tally);
 
-      // Booking link
+      // Booking CTA button (Feature 4)
       if (h.bookingUrl) {
         const bookLink = document.createElement('a');
         bookLink.href = h.bookingUrl;
         bookLink.target = '_blank';
         bookLink.rel = 'noopener noreferrer';
-        bookLink.textContent = 'Auf Booking.com →';
-        bookLink.style.cssText = 'font-size:12px;font-weight:600;color:#0066cc;text-decoration:none;margin-left:auto;';
+        bookLink.textContent = '🏨 Jetzt buchen';
+        bookLink.className = 'hotel-card-button hotel-card-button-book';
         actions.appendChild(bookLink);
       }
 
@@ -1198,10 +1315,13 @@ const icalDownloadUrl = buildICalDownloadUrl({
       const aEl = container.querySelector('[data-cal-apple]');
       const oEl = container.querySelector('[data-cal-outlook]');
       const yEl = container.querySelector('[data-cal-yahoo]');
+      const wEl = container.querySelector('[data-cal-webcal]');
       if (gEl) gEl.setAttribute('href', urls.google);
       if (aEl) aEl.setAttribute('href', urls.apple);
       if (oEl) oEl.setAttribute('href', urls.outlook);
       if (yEl) yEl.setAttribute('href', urls.yahoo);
+      // Feature 5: webcal:// link uses the same .ics URL but with webcal:// scheme
+      if (wEl) wEl.setAttribute('href', urls.apple.replace(/^https?:\/\//, 'webcal://'));
       container.hidden = false;
     }
 
@@ -1228,22 +1348,29 @@ const icalDownloadUrl = buildICalDownloadUrl({
     async function refreshState() {
       const url =
         apiBase +
-        '/api/poll?slug=' +
+        ‘/api/poll?slug=’ +
         encodeURIComponent(slug) +
-        '&token=' +
+        ‘&token=’ +
         encodeURIComponent(token);
       try {
-        const res = await fetch(url, { headers: { Accept: 'application/json' } });
-        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const res = await fetch(url, { headers: { Accept: ‘application/json’ } });
+        if (!res.ok) throw new Error(‘HTTP ‘ + res.status);
         const data = await res.json();
         applyServerState(data);
+        // Feature 1: start live-poll interval when poll is open, stop when closed
+        if (!data.closed && !pollInterval) {
+          pollInterval = setInterval(refreshState, 30000);
+        } else if (data.closed && pollInterval) {
+          clearInterval(pollInterval);
+          pollInterval = null;
+        }
       } catch (err) {
-        setStatus('offline — votes won’t save');
+        setStatus(‘offline — votes won’t save’);
       }
     }
 
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') refreshState();
+    document.addEventListener(‘visibilitychange’, () => {
+      if (document.visibilityState === ‘visible’) refreshState();
     });
 
     refreshState();
@@ -1328,5 +1455,37 @@ const icalDownloadUrl = buildICalDownloadUrl({
     background: var(--color-error, #b3261e);
     color: #fff;
   }
+
+  /* Feature 9: Share buttons */
+  .share-buttons {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 16px;
+    flex-wrap: wrap;
+  }
+  .share-label {
+    font-family: var(--font-body, 'DM Sans', system-ui, sans-serif);
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-on-surface-variant, #475569);
+  }
+  .share-btn {
+    display: inline-flex;
+    align-items: center;
+    padding: 5px 14px;
+    border-radius: 99px;
+    font-family: var(--font-body, 'DM Sans', system-ui, sans-serif);
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    color: #fff;
+    transition: opacity 0.12s;
+  }
+  .share-btn:hover { opacity: 0.85; }
+  .share-btn-whatsapp { background: #25D366; }
+  .share-btn-telegram { background: #229ED9; }
 </style>
 </BaseLayout>

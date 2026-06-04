@@ -56,6 +56,9 @@ const closeDateShort = new Date(pollCloseAt).toLocaleString('en-GB', {
       </>
     )}
   </div>
+
+  {/* Feature 8: participant progress — populated by IIFE */}
+  <div id="participant-progress" class="participant-progress" hidden></div>
 </header>
 
 <style>
@@ -154,5 +157,13 @@ const closeDateShort = new Date(pollCloseAt).toLocaleString('en-GB', {
   .poll-countdown--closed {
     background: var(--color-surface-container-high, #c9daf0);
     color: var(--color-on-surface-variant, #475569);
+  }
+
+  /* Feature 8: participant progress */
+  .participant-progress {
+    margin-top: 8px;
+    font-family: var(--font-body, 'DM Sans', system-ui, sans-serif);
+    font-size: 13px;
+    color: #475569;
   }
 </style>

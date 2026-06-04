@@ -55,7 +55,8 @@ function icalResponse(body: string, filename: string): Response {
     headers: {
       'Content-Type': 'text/calendar; charset=utf-8',
       'Content-Disposition': `attachment; filename="${filename}"`,
-      'Cache-Control': 'public, max-age=300',
+      // Feature 5: no-cache so calendar apps (webcal://) always get fresh data
+      'Cache-Control': 'no-cache',
     },
   });
 }

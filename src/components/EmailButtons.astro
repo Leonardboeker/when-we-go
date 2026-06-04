@@ -27,6 +27,13 @@
   <p class="add-to-calendar-note">
     The .ics file works in any calendar app — clicking Apple downloads it.
   </p>
+  <!-- Feature 5: WEBCAL live subscription -->
+  <div class="webcal-row">
+    <a href="#" data-cal-webcal class="cal-btn cal-btn-webcal">📅 In Kalender abonnieren (live)</a>
+  </div>
+  <p class="add-to-calendar-note">
+    Aktualisiert sich automatisch wenn sich Termine ändern.
+  </p>
 </div>
 
 <style>
@@ -88,5 +95,14 @@
     margin: 10px 0 0 0;
     font-size: 12px;
     color: var(--color-on-surface-variant, #888);
+  }
+  /* Feature 5: webcal row */
+  .webcal-row {
+    margin-top: 10px;
+  }
+  .cal-btn-webcal {
+    background: #0f7b3b;
+    width: 100%;
+    box-sizing: border-box;
   }
 </style>

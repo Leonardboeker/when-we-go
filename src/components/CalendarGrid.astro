@@ -277,6 +277,31 @@ const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     pointer-events: none;
   }
 
+  /* Feature 1: live-update animation */
+  @keyframes cellPulse {
+    0% { transform: scale(1.12); }
+    100% { transform: scale(1); }
+  }
+  .cell-updated { animation: cellPulse 0.3s ease-out; }
+
+  /* Feature 2: red dot for dates with a "no" vote */
+  .cell-has-no::after {
+    content: '';
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #ef4444;
+    pointer-events: none;
+  }
+
+  /* Feature 7: best-week highlight */
+  .cell-best-week {
+    box-shadow: inset 0 0 0 2px #16a34a !important;
+  }
+
   /* ── How-it-works bar ── */
   .calendar-how-it-works {
     display: flex;
@@ -334,6 +359,19 @@ const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   .swatch-maybe { background: #f59e0b; border-color: #d97706; }
   .swatch-no    { background: #fee2e2; border-color: #fca5a5; }
 
+  /* Feature 7: best-week hint pill */
+  :global(.best-week-hint) {
+    display: inline-block;
+    margin: 8px 0 4px;
+    padding: 5px 12px;
+    background: #dcfce7;
+    color: #166534;
+    border-radius: 99px;
+    font-family: var(--font-body, 'DM Sans', system-ui, sans-serif);
+    font-size: 13px;
+    font-weight: 600;
+  }
+
   /* ── Status line (bottom) ── */
   .calendar-status {
     margin: 10px 0 0;
@@ -360,3 +398,24 @@ const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     .calendar-weekday { font-size: 12px; }
   }
 </style>
+
+<script>
+  // Feature 6: Swipe navigation between months
+  const calGrid = document.querySelector('.calendar-grid');
+  if (calGrid) {
+    let touchStartX = 0;
+    calGrid.addEventListener('touchstart', (e) => {
+      touchStartX = (e as TouchEvent).touches[0].clientX;
+    }, { passive: true });
+    calGrid.addEventListener('touchend', (e) => {
+      const delta = (e as TouchEvent).changedTouches[0].clientX - touchStartX;
+      const dividers = document.querySelectorAll('.calendar-month-divider');
+      const visible = [...dividers].find((d) => d.getBoundingClientRect().top > 0);
+      if (Math.abs(delta) > 50 && visible) {
+        const idx = [...dividers].indexOf(visible as Element);
+        const target = delta < 0 ? dividers[idx + 1] : dividers[Math.max(0, idx - 1)];
+        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+  }
+</script>

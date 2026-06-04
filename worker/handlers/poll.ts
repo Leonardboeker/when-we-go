@@ -55,6 +55,19 @@ export async function handlePoll(
 
   const viewerHistory = history.find((h) => h.token === token);
 
+  // Build a voterStatus summary: one entry per participant, with voteCount.
+  // We only expose voteCount (not dates/states) so no private data leaks.
+  const voterStatusByToken = new Map(
+    (history as Array<{ token: string; vote_count: number }>).map((h) => [
+      h.token,
+      h.vote_count,
+    ])
+  );
+  const voterStatus = poll.participants.map((p) => ({
+    name: p.name,
+    voteCount: voterStatusByToken.get(p.token) ?? 0,
+  }));
+
   return jsonResponse(
     {
       poll: {
@@ -76,6 +89,7 @@ export async function handlePoll(
         date: v.date,
         state: v.state,
       })),
+      voterStatus,
       closed,
       closedAt: closedAtIso,
       overlap,
