@@ -129,6 +129,15 @@ const icalDownloadUrl = buildICalDownloadUrl({
       <p class="trip-preclose-hint" id="trip-pre-close-msg" hidden>
         ✈️ Sobald die Abstimmung endet, erscheinen hier Flüge, Hotels & Tipps.
       </p>
+      {/* Feature 2 (weather): typical weather for the destination + dates.
+          Populated client-side from Open-Meteo (free, no key). */}
+      <div id="weather-widget" class="weather-widget" hidden>
+        <span class="weather-emoji" id="weather-emoji" aria-hidden="true">⛅</span>
+        <div class="weather-body">
+          <p class="weather-title" id="weather-title"></p>
+          <p class="weather-sub" id="weather-sub"></p>
+        </div>
+      </div>
       <FlightOptions />
       <HotelShortlist mode="participant" />
       <ActivitiesList />
@@ -572,6 +581,8 @@ const icalDownloadUrl = buildICalDownloadUrl({
         loadFlights(false);
         loadHotels();
         loadActivities();
+        // Feature 2: weather for the trip window (Open-Meteo, non-blocking).
+        loadWeather(data.overlap);
         // Auto-switch to Trip tab and show notification badge.
         if (typeof window.__switchToTripTab === 'function') {
           window.__switchToTripTab(true);
@@ -1407,6 +1418,79 @@ const icalDownloadUrl = buildICalDownloadUrl({
       }
     }
 
+    // ── Feature 2: typical weather for destination + trip dates ──
+    // Open-Meteo geocoding + historical archive (same calendar dates, a recent
+    // year) as a robust "typisches Wetter" proxy that works regardless of how
+    // far out the trip is. Free, no API key, CORS-friendly. All data is real.
+    function weatherEmoji(avgMax, rainDays, total) {
+      if (rainDays / Math.max(1, total) > 0.5) return '🌧️';
+      if (rainDays / Math.max(1, total) > 0.25) return '🌦️';
+      if (avgMax >= 24) return '☀️';
+      if (avgMax >= 16) return '⛅';
+      if (avgMax >= 8) return '🌥️';
+      return '❄️';
+    }
+    async function loadWeather(overlap) {
+      const el = document.getElementById('weather-widget');
+      if (!el) return;
+      try {
+        const city = (pollDestination || '').split(',')[0].trim();
+        if (!city) return;
+        // Featured trip range (fallback: poll start, capped to ~7 days).
+        const ranges = (overlap && overlap.ranges) || [];
+        const feat = ranges.find((r) => r.tier === 'perfect') ||
+          ranges.find((r) => r.tier === 'withEffort') || ranges[0] || null;
+        let start = feat ? feat.start : dateRangeStartIn;
+        if (!start) return;
+        // Sample up to 7 days from start.
+        const startDt = new Date(start + 'T00:00:00Z');
+        const endDt = new Date(startDt.getTime() + 6 * 86400000);
+        const fmt = (d) => d.toISOString().slice(0, 10);
+        const monthName = startDt.toLocaleString('de-DE', { month: 'long' });
+
+        // 1) Geocode the city (real coords).
+        const geo = await fetch(
+          'https://geocoding-api.open-meteo.com/v1/search?name=' +
+          encodeURIComponent(city) + '&count=1&language=de'
+        ).then((r) => r.json());
+        const place = geo && geo.results && geo.results[0];
+        if (!place) return;
+
+        // 2) Historical archive for the same dates, recent year (2023).
+        const y = '2023';
+        const s2 = y + fmt(startDt).slice(4);
+        const e2 = y + fmt(endDt).slice(4);
+        const wx = await fetch(
+          'https://archive-api.open-meteo.com/v1/archive?latitude=' + place.latitude +
+          '&longitude=' + place.longitude + '&start_date=' + s2 + '&end_date=' + e2 +
+          '&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&timezone=auto'
+        ).then((r) => r.json());
+        const d = wx && wx.daily;
+        if (!d || !d.temperature_2m_max || !d.temperature_2m_max.length) return;
+        const maxs = d.temperature_2m_max.filter((x) => x != null);
+        const mins = d.temperature_2m_min.filter((x) => x != null);
+        const precs = (d.precipitation_sum || []).filter((x) => x != null);
+        if (!maxs.length) return;
+        const avgMax = Math.round(maxs.reduce((a, b) => a + b, 0) / maxs.length);
+        const avgMin = Math.round(mins.reduce((a, b) => a + b, 0) / Math.max(1, mins.length));
+        const rainDays = precs.filter((p) => p >= 1).length;
+
+        const emojiEl = document.getElementById('weather-emoji');
+        const titleEl = document.getElementById('weather-title');
+        const subEl = document.getElementById('weather-sub');
+        if (emojiEl) emojiEl.textContent = weatherEmoji(avgMax, rainDays, precs.length);
+        if (titleEl) titleEl.textContent = 'Typisches Wetter im ' + monthName + ' · ' + avgMax + '° / ' + avgMin + '°';
+        if (subEl) {
+          subEl.textContent = city + ' · ' +
+            (rainDays === 0 ? 'meist trocken' : rainDays + ' von ' + precs.length + ' Tagen Regen') +
+            ' (historischer Schnitt)';
+        }
+        el.hidden = false;
+      } catch (e) {
+        // Weather is best-effort — silently skip on any failure.
+      }
+    }
+
     // Phase 8: build add-to-calendar URLs from the featured trip range and
     // reveal the inline button block. Skipped if the calendar block isn't in
     // the DOM (defensive — older SSR cache).
@@ -1635,6 +1719,31 @@ const icalDownloadUrl = buildICalDownloadUrl({
     font-weight: 600;
   }
   .trip-closed-icon { font-size: 18px; flex-shrink: 0; }
+  /* Feature 2: weather widget */
+  .weather-widget {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin: 0 0 16px;
+    padding: 14px 16px;
+    background: linear-gradient(135deg, #e0f2fe 0%, #eef4fb 100%);
+    border: 1.5px solid var(--color-outline-variant, #cbd5e1);
+    border-radius: var(--radius-lg, 16px);
+  }
+  .weather-emoji { font-size: 34px; line-height: 1; flex-shrink: 0; }
+  .weather-body { min-width: 0; }
+  .weather-title {
+    margin: 0;
+    font-family: var(--font-body, 'DM Sans', system-ui, sans-serif);
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--color-on-background, #0f172a);
+  }
+  .weather-sub {
+    margin: 2px 0 0;
+    font-size: 12px;
+    color: var(--color-on-surface-variant, #475569);
+  }
   .vote-toast {
     position: fixed;
     left: 50%;
