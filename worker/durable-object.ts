@@ -33,9 +33,6 @@ export interface Env {
   WHENWEGO_AMADEUS_CLIENT_ID?: string;
   WHENWEGO_AMADEUS_CLIENT_SECRET?: string;
   WHENWEGO_AMADEUS_ENV?: string;
-  // Phase 7 — Anthropic Claude API (activity suggestions).
-  // Optional: when unset, activities handlers return reason: 'not_configured'.
-  WHENWEGO_ANTHROPIC_API_KEY?: string;
 }
 
 export type VoteState = 'yes' | 'maybe' | 'no';
