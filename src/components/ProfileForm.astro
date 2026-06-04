@@ -30,21 +30,21 @@ const { initial } = Astro.props as Props;
 const initialInterests = new Set(initial?.interests ?? []);
 
 const INTEREST_OPTIONS: Array<{ value: string; label: string }> = [
-  { value: 'museums', label: 'Museums' },
-  { value: 'outdoors', label: 'Outdoors' },
-  { value: 'food', label: 'Food' },
-  { value: 'nightlife', label: 'Nightlife' },
-  { value: 'history', label: 'History' },
+  { value: 'museums', label: 'Museen' },
+  { value: 'outdoors', label: 'Natur' },
+  { value: 'food', label: 'Essen' },
+  { value: 'nightlife', label: 'Nachtleben' },
+  { value: 'history', label: 'Geschichte' },
   { value: 'festivals', label: 'Festivals' },
   { value: 'shopping', label: 'Shopping' },
-  { value: 'beach', label: 'Beach' },
+  { value: 'beach', label: 'Strand' },
 ];
 
 const BUDGET_OPTIONS: Array<{ value: string; label: string }> = [
   { value: '200', label: '€200' },
   { value: '500', label: '€500' },
   { value: '1000', label: '€1000' },
-  { value: '', label: 'No limit' },
+  { value: '', label: 'Egal' },
 ];
 
 // Serialise the airport list once so the inline script can fuzzy-match it
@@ -58,15 +58,15 @@ const airportsJson = JSON.stringify(airports);
   aria-labelledby="profile-form-heading"
 >
   <header class="profile-form-header">
-    <h2 id="profile-form-heading">A few quick details</h2>
+    <h2 id="profile-form-heading">Kurz zu dir</h2>
     <p class="profile-form-sub">
-      So we can send you trip info and personalise the suggestions.
+      Damit wir dir Reise-Infos schicken und die Vorschläge personalisieren können.
     </p>
   </header>
 
   <form id="profile-form-element" novalidate>
     <div class="profile-field">
-      <label for="profile-email">Where should we send the trip details?</label>
+      <label for="profile-email">Wohin sollen wir die Reise-Infos schicken?</label>
       <input
         type="email"
         id="profile-email"
@@ -81,7 +81,7 @@ const airportsJson = JSON.stringify(airports);
     </div>
 
     <div class="profile-field profile-field-airport">
-      <label for="profile-airport">Where do you fly from?</label>
+      <label for="profile-airport">Von wo fliegst du?</label>
       <input
         type="text"
         id="profile-airport"
@@ -92,7 +92,7 @@ const airportsJson = JSON.stringify(airports);
         spellcheck="false"
         required
         value={initial?.homeAirport ?? ''}
-        placeholder="MUC or Munich"
+        placeholder="MUC oder München"
         aria-describedby="profile-airport-help"
         aria-autocomplete="list"
         aria-controls="profile-airport-list"
@@ -112,13 +112,13 @@ const airportsJson = JSON.stringify(airports);
         hidden
       ></ul>
       <span id="profile-airport-help" class="profile-field-help">
-        Type a city or IATA code — pick one from the list.
+        Stadt oder IATA-Code tippen — dann aus der Liste wählen.
       </span>
       <span class="profile-field-error" data-error-for="homeAirport" hidden></span>
     </div>
 
     <div class="profile-field">
-      <span class="profile-field-label">What's your per-person budget?</span>
+      <span class="profile-field-label">Budget pro Person?</span>
       <div class="profile-radio-group" role="radiogroup" aria-label="Budget cap per person">
         {BUDGET_OPTIONS.map((opt) => {
           const checked = opt.value === ''
@@ -140,7 +140,7 @@ const airportsJson = JSON.stringify(airports);
     </div>
 
     <div class="profile-field">
-      <span class="profile-field-label">What kinds of things do you enjoy?</span>
+      <span class="profile-field-label">Worauf hast du Lust?</span>
       <div class="profile-checks">
         {INTEREST_OPTIONS.map((opt) => (
           <label class="profile-check">
@@ -158,7 +158,7 @@ const airportsJson = JSON.stringify(airports);
 
     <div class="profile-actions">
       <button type="submit" class="profile-submit" data-profile-submit>
-        Save &amp; continue
+        Speichern & weiter
       </button>
       <span class="profile-status" data-profile-status aria-live="polite"></span>
     </div>
@@ -301,11 +301,11 @@ const airportsJson = JSON.stringify(airports);
   .profile-form {
     margin: 0 0 24px;
     padding: 20px 18px;
-    background: var(--color-surface-container-low, #f7f3ed);
-    border: 3px solid var(--color-on-background, #1a1a1a);
-    box-shadow: 4px 4px 0 var(--color-on-background, #1a1a1a);
-    font-family: var(--font-body, 'Space Mono', monospace);
-    color: var(--color-on-background, #1a1a1a);
+    background: #fff;
+    border-radius: var(--radius-lg, 16px);
+    box-shadow: 0 2px 12px rgba(15, 23, 42, 0.08), 0 1px 3px rgba(15, 23, 42, 0.06);
+    font-family: var(--font-body, 'DM Sans', system-ui, sans-serif);
+    color: var(--color-on-background, #0f172a);
   }
   .profile-form-header { margin: 0 0 16px; }
   .profile-form-header h2 {

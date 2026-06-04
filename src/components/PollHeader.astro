@@ -16,7 +16,7 @@ const { participantName, title, destination, pollCloseAt } = Astro.props;
 
 const days = daysUntil(pollCloseAt);
 const closed = days === 0;
-const closeDateShort = new Date(pollCloseAt).toLocaleString('en-GB', {
+const closeDateShort = new Date(pollCloseAt).toLocaleString('de-DE', {
   day: '2-digit',
   month: 'short',
   year: 'numeric',
@@ -36,23 +36,23 @@ const closeDateShort = new Date(pollCloseAt).toLocaleString('en-GB', {
   <p class="poll-header-greeting">Hey <strong>{participantName}</strong></p>
   <h1 class="poll-header-title">
     {destination
-      ? <>when can you come?</>
-      : <>when can you join <span class="poll-header-dest">{title}</span>?</>}
+      ? <>Wann kannst du?</>
+      : <>Wann kannst du bei <span class="poll-header-dest">{title}</span>?</>}
   </h1>
 
   {/* Poll close meta */}
   <p class="poll-header-meta">
-    Poll closes {closeDateShort}
+    Abstimmung endet {closeDateShort}
   </p>
 
   {/* Countdown badge */}
   <div class={['poll-countdown', closed && 'poll-countdown--closed'].filter(Boolean).join(' ')}>
     {closed ? (
-      <span class="poll-countdown-label">Poll closed</span>
+      <span class="poll-countdown-label">Abstimmung beendet</span>
     ) : (
       <>
         <span class="poll-countdown-num">{days}</span>
-        <span class="poll-countdown-label">day{days === 1 ? '' : 's'} left to vote</span>
+        <span class="poll-countdown-label">Tag{days === 1 ? '' : 'e'} zum Abstimmen</span>
       </>
     )}
   </div>

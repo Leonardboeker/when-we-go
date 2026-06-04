@@ -41,7 +41,7 @@ const { poll, participant } = Astro.props as {
 
 // Cross-poll isolation: only this poll's data is in scope. Other polls are
 // not imported or referenced below. (verify-isolation.mjs enforces this.)
-const title = `Hey ${participant.name} — when can you ${poll.destination ? `come to ${poll.destination}` : 'join'}?`;
+const title = `Hey ${participant.name} — wann kannst du${poll.destination ? ` nach ${poll.destination}` : ''}?`;
 
 // API base URL. Override via WHENWEGO_PUBLIC_API_BASE (build env). Defaults to
 // same-origin (empty string) so the deployed Worker route handles /api/* paths.
@@ -69,11 +69,11 @@ const icalDownloadUrl = buildICalDownloadUrl({
 <BaseLayout
   title={title}
   ogImage={`/og/${poll.slug}.png`}
-  ogDescription={`${poll.title} — pick the days you can come. Poll closes ${poll.pollCloseAt.slice(0, 10)}.`}
+  ogDescription={`${poll.title} — tippe die Tage an, an denen du kannst. Abstimmung endet ${poll.pollCloseAt.slice(0, 10)}.`}
 >
   <main class="page-wrapper">
     {/* Visually hidden h1 for screen readers — PollHeader provides the visual heading. */}
-    <h1 class="sr-only">Hey {participant.name} — pick your dates for {poll.title}</h1>
+    <h1 class="sr-only">Hey {participant.name} — wähl deine Tage für {poll.title}</h1>
 
     <PollHeader
       participantName={participant.name}
@@ -127,7 +127,7 @@ const icalDownloadUrl = buildICalDownloadUrl({
         <span id="trip-closed-text">Die Abstimmung ist beendet — hier sind die Ergebnisse.</span>
       </div>
       <p class="trip-preclose-hint" id="trip-pre-close-msg" hidden>
-        ✈️ Trip details appear here once the poll closes.
+        ✈️ Sobald die Abstimmung endet, erscheinen hier Flüge, Hotels & Tipps.
       </p>
       <FlightOptions />
       <HotelShortlist mode="participant" />
@@ -137,8 +137,8 @@ const icalDownloadUrl = buildICalDownloadUrl({
     {/* ── Section: Profile ─────────────────────────────────────────── */}
     <div class="page-section" data-section="profile" hidden>
       <div class="profile-tab-header">
-        <h2 class="profile-tab-title">Your profile</h2>
-        <p class="profile-tab-hint">Used for personalised flight suggestions and email reminders.</p>
+        <h2 class="profile-tab-title">Dein Profil</h2>
+        <p class="profile-tab-hint">Für persönliche Flug-Vorschläge und Erinnerungs-Mails.</p>
       </div>
       <ProfileForm />
     </div>
@@ -239,12 +239,12 @@ const icalDownloadUrl = buildICalDownloadUrl({
 
     function validateProfileClientSide(p) {
       const errors = {};
-      if (!p.email) errors.email = 'Please enter your email.';
+      if (!p.email) errors.email = 'Bitte gib deine E-Mail ein.';
       else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p.email))
-        errors.email = 'That email looks invalid.';
-      if (!p.homeAirport) errors.homeAirport = 'Pick your home airport.';
+        errors.email = 'Diese E-Mail sieht ungültig aus.';
+      if (!p.homeAirport) errors.homeAirport = 'Wähl deinen Heimatflughafen.';
       else if (!/^[A-Z]{3}$/.test(p.homeAirport))
-        errors.homeAirport = 'Airport must be a 3-letter IATA code.';
+        errors.homeAirport = 'Flughafen muss ein 3-Buchstaben-IATA-Code sein.';
       return errors;
     }
 
@@ -271,11 +271,11 @@ const icalDownloadUrl = buildICalDownloadUrl({
       const errors = validateProfileClientSide(payload);
       if (Object.keys(errors).length > 0) {
         for (const k of Object.keys(errors)) setFieldError(k, errors[k]);
-        setProfileStatus('Please fix the errors above.', 'err');
+        setProfileStatus('Bitte korrigier die Fehler oben.', 'err');
         return;
       }
       if (profileSubmitBtn) profileSubmitBtn.disabled = true;
-      setProfileStatus('Saving…', '');
+      setProfileStatus('Speichert…', '');
       try {
         const res = await fetch(apiBase + '/api/profile', {
           method: 'POST',
@@ -287,7 +287,7 @@ const icalDownloadUrl = buildICalDownloadUrl({
           throw new Error(j.error || 'HTTP ' + res.status);
         }
         const j = await res.json();
-        setProfileStatus('Saved.', '');
+        setProfileStatus('Gespeichert.', '');
         if (j.profileComplete) {
           showCalendar();
           // Refresh server state so the grid initialises with current votes.
@@ -295,7 +295,7 @@ const icalDownloadUrl = buildICalDownloadUrl({
         }
       } catch (err) {
         setProfileStatus(
-          'Save failed: ' + (err && err.message ? err.message : 'unknown'),
+          'Speichern fehlgeschlagen: ' + (err && err.message ? err.message : 'unbekannt'),
           'err'
         );
       } finally {
@@ -410,7 +410,7 @@ const icalDownloadUrl = buildICalDownloadUrl({
         if (err && err.name === 'AbortError') return;
         setStatus('Nicht gespeichert — nochmal tippen', 'error');
         showToast(
-          'Save failed: ' + (err && err.message ? err.message : 'unknown'),
+          'Speichern fehlgeschlagen: ' + (err && err.message ? err.message : 'unbekannt'),
           'err'
         );
       }
@@ -929,7 +929,7 @@ const icalDownloadUrl = buildICalDownloadUrl({
       } catch (err) {
         if (flightStateEl && flightStateText) {
           flightStateText.textContent =
-            'Could not load flights right now — try refreshing the page.';
+            'Flüge konnten gerade nicht geladen werden — Seite neu laden.';
           flightStateEl.hidden = false;
         }
       } finally {
@@ -1180,7 +1180,7 @@ const icalDownloadUrl = buildICalDownloadUrl({
       } catch (err) {
         if (hotelStateEl && hotelStateText) {
           hotelStateText.textContent =
-            'Could not load hotels right now — try refreshing the page.';
+            'Hotels konnten gerade nicht geladen werden — Seite neu laden.';
           hotelStateEl.hidden = false;
         }
       } finally {
@@ -1281,7 +1281,7 @@ const icalDownloadUrl = buildICalDownloadUrl({
       // Price badge inline with name
       const priceTag = document.createElement('span');
       priceTag.style.cssText = 'font-size:12px;font-weight:700;white-space:nowrap;color:' + (item.paid ? '#0f172a' : '#16a34a');
-      priceTag.textContent = item.paid ? (typeof item.priceEur === 'number' ? '€' + item.priceEur : 'Paid') : 'Free';
+      priceTag.textContent = item.paid ? (typeof item.priceEur === 'number' ? '€' + item.priceEur : 'Kostenpflichtig') : 'Gratis';
       nameRow.appendChild(priceTag);
       body.appendChild(nameRow);
 
@@ -1357,8 +1357,8 @@ const icalDownloadUrl = buildICalDownloadUrl({
         if (activitiesStateEl && activitiesStateText) {
           activitiesStateText.textContent =
             reason === 'destination_too_obscure'
-              ? "We couldn't find specific activity suggestions for this destination — try TripAdvisor or your favourite travel guide."
-              : 'Activity suggestions are temporarily unavailable — refresh in a few minutes.';
+              ? 'Für dieses Ziel haben wir keine konkreten Tipps — schau auf TripAdvisor oder in deinem Reiseführer.'
+              : 'Aktivitäten gerade nicht verfügbar — in ein paar Minuten neu laden.';
           activitiesStateEl.hidden = false;
         }
         return;
@@ -1398,7 +1398,7 @@ const icalDownloadUrl = buildICalDownloadUrl({
       } catch (err) {
         if (activitiesStateEl && activitiesStateText) {
           activitiesStateText.textContent =
-            'Could not load activities right now — try refreshing the page.';
+            'Aktivitäten konnten gerade nicht geladen werden — Seite neu laden.';
           activitiesStateEl.hidden = false;
           activitiesSection.hidden = false;
         }
