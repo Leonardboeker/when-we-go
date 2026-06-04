@@ -23,6 +23,7 @@ import { isInReminderWindow } from './lib/reminder-window';
 import { fanOutReminders } from './lib/reminder-fanout';
 import { loadFlightsForParticipant } from './handlers/flights';
 import { loadHotelsForPoll } from './handlers/hotels';
+import { loadActivitiesForPoll } from './handlers/activities';
 
 const ALL_REMINDER_TYPES: ReminderType[] = ['T-30', 'T-7', 'T-1', 'T+1'];
 
@@ -104,6 +105,17 @@ export async function handleScheduled(
           );
         } catch (err) {
           console.error(`[cron] hotels pre-fetch failed for ${poll.slug}`, err);
+        }
+
+        // Phase 7: pre-fetch activity suggestions into cache so the
+        // close-summary email + post-close UI both hit warm data.
+        try {
+          const acts = await loadActivitiesForPoll({ env, poll });
+          console.log(
+            `[cron] activities pre-fetch for ${poll.slug}: reason=${acts.reason} thisWeek=${acts.thisWeek.length} alwaysGreat=${acts.alwaysGreat.length}`
+          );
+        } catch (err) {
+          console.error(`[cron] activities pre-fetch failed for ${poll.slug}`, err);
         }
 
         // Phase 8: per-participant close-summary emails (fire-and-forget).

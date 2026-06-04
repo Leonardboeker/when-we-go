@@ -47,6 +47,7 @@ import { handleHotels } from './handlers/hotels';
 import { handleHotelsRefresh } from './handlers/hotels-refresh';
 import { handleHotelVote } from './handlers/hotel-vote';
 import { handleAdminHotelChoose } from './handlers/admin-hotel-choose';
+import { handleActivities, handleActivitiesRefresh } from './handlers/activities';
 import { handleScheduled } from './scheduled';
 
 export { WhenWeGoPollDO };
@@ -55,8 +56,8 @@ const router = new Router();
 
 router.get('/api/health', (req, _env, _ctx) => {
   const env = _env as Env;
-  // Phase number reflects total shipped phases (Phase 5/6 land AFTER 10).
-  return jsonResponse({ ok: true, phase: 12 }, { status: 200 }, req, env);
+  // Phase number reflects total shipped phases (Phase 7 = last).
+  return jsonResponse({ ok: true, phase: 14 }, { status: 200 }, req, env);
 });
 
 router.get('/api/poll', (req, env, ctx) =>
@@ -123,6 +124,15 @@ router.post('/api/hotel-vote', (req, env, ctx) =>
 );
 router.post('/api/admin/hotel-choose', (req, env, ctx) =>
   handleAdminHotelChoose(req, env as Env, ctx)
+);
+
+// Phase 7 — activity suggestions (Claude API, shared list, 7d cache).
+// Participant GET: any valid token. Organiser POST refresh: X-Organizer-Token, 1/day.
+router.get('/api/activities', (req, env, ctx) =>
+  handleActivities(req, env as Env, ctx)
+);
+router.post('/api/activities/refresh', (req, env, ctx) =>
+  handleActivitiesRefresh(req, env as Env, ctx)
 );
 
 export default {

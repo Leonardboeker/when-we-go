@@ -11,6 +11,7 @@ import ProfileForm from '../../components/ProfileForm.astro';
 import EmailButtons from '../../components/EmailButtons.astro';
 import FlightOptions from '../../components/FlightOptions.astro';
 import HotelShortlist from '../../components/HotelShortlist.astro';
+import ActivitySuggestions from '../../components/ActivitySuggestions.astro';
 import { buildICalDownloadUrl } from '../../lib/calendar-links';
 
 export const prerender = true;
@@ -110,6 +111,10 @@ const icalDownloadUrl = buildICalDownloadUrl({
     {/* Phase 6: shared hotel shortlist. Same gating as FlightOptions —
         revealed once /api/hotels resolves post-close. */}
     <HotelShortlist mode="participant" />
+
+    {/* Phase 7: curated activity suggestions (Claude API). Hidden pre-close;
+        revealed once /api/activities resolves post-close. */}
+    <ActivitySuggestions />
 
     <div id="vote-toast" class="vote-toast" role="status" aria-live="polite" hidden></div>
   </main>
@@ -449,6 +454,8 @@ const icalDownloadUrl = buildICalDownloadUrl({
         loadFlights(false);
         // Phase 6: shared hotel shortlist — same non-blocking pattern.
         loadHotels();
+        // Phase 7: activity suggestions — same non-blocking pattern.
+        loadActivities();
       }
     }
 
@@ -894,6 +901,151 @@ const icalDownloadUrl = buildICalDownloadUrl({
         loadHotels();
       } catch (err) {
         showToast('Vote failed', 'err');
+      }
+    }
+
+    // ─── Phase 7: activity suggestions ──────────────────────────────────
+    const activitySection = document.getElementById('activity-suggestions');
+    const activityRefreshBtn = activitySection
+      ? activitySection.querySelector('[data-activities-refresh]')
+      : null;
+    const activityStateEl = activitySection
+      ? activitySection.querySelector('[data-activities-state]')
+      : null;
+    const activityStateText = activitySection
+      ? activitySection.querySelector('[data-activities-state-text]')
+      : null;
+    const activityNotConfiguredEl = activitySection
+      ? activitySection.querySelector('[data-activities-not-configured]')
+      : null;
+    const activityThisWeekTier = document.getElementById('activity-this-week');
+    const activityAlwaysGreatTier = document.getElementById('activity-always-great');
+    const activityThisWeekList = activityThisWeekTier
+      ? activityThisWeekTier.querySelector('[data-activities-this-week]')
+      : null;
+    const activityAlwaysGreatList = activityAlwaysGreatTier
+      ? activityAlwaysGreatTier.querySelector('[data-activities-always-great]')
+      : null;
+
+    const ACTIVITY_TYPE_ICON = {
+      concert: '🎵', festival: '🎪', museum: '🏛️', food: '🍽️',
+      outdoors: '🌿', history: '🏺', neighborhood: '🏘️', event: '📅', other: '✨'
+    };
+
+    function renderActivityCard(item) {
+      const li = document.createElement('li');
+      li.className = 'activity-card' + (item.confidence === 'low' ? ' is-low-confidence' : '');
+
+      const iconEl = document.createElement('div');
+      iconEl.className = 'activity-icon';
+      iconEl.textContent = ACTIVITY_TYPE_ICON[item.type] || '✨';
+      li.appendChild(iconEl);
+
+      const body = document.createElement('div');
+
+      const nameEl = document.createElement('p');
+      nameEl.className = 'activity-name';
+      nameEl.textContent = item.name;
+      if (item.confidence === 'medium') {
+        const badge = document.createElement('span');
+        badge.className = 'activity-confidence-badge activity-confidence-badge--medium';
+        badge.textContent = 'ℹ verify dates';
+        nameEl.appendChild(badge);
+      } else if (item.confidence === 'low') {
+        const badge = document.createElement('span');
+        badge.className = 'activity-confidence-badge activity-confidence-badge--low';
+        badge.textContent = '⚠ check schedule';
+        nameEl.appendChild(badge);
+      }
+      body.appendChild(nameEl);
+
+      const metaEl = document.createElement('p');
+      metaEl.className = 'activity-meta';
+      const freePaid = item.paid
+        ? (item.priceEur ? '€' + Math.round(item.priceEur) : 'Paid')
+        : 'Free';
+      metaEl.textContent = item.dateRange + ' · ' + freePaid;
+      body.appendChild(metaEl);
+
+      const whyEl = document.createElement('p');
+      whyEl.className = 'activity-why';
+      whyEl.textContent = item.whyOneSentence;
+      body.appendChild(whyEl);
+
+      li.appendChild(body);
+      return li;
+    }
+
+    function renderActivities(data) {
+      if (!activitySection) return;
+      activitySection.hidden = false;
+
+      const reason = data && data.reason;
+
+      if (reason === 'not_configured') {
+        if (activityNotConfiguredEl) activityNotConfiguredEl.hidden = false;
+        return;
+      }
+      if (reason !== 'ok') {
+        if (activityStateEl && activityStateText) {
+          activityStateText.textContent =
+            reason === 'api_down'
+              ? 'Activity suggestions temporarily unavailable — try refreshing.'
+              : 'Could not load activity suggestions.';
+          activityStateEl.hidden = false;
+        }
+        return;
+      }
+
+      const thisWeek = (data && data.thisWeek) || [];
+      const alwaysGreat = (data && data.alwaysGreat) || [];
+
+      if (thisWeek.length > 0 && activityThisWeekList && activityThisWeekTier) {
+        activityThisWeekList.innerHTML = '';
+        for (const item of thisWeek) {
+          activityThisWeekList.appendChild(renderActivityCard(item));
+        }
+        activityThisWeekTier.hidden = false;
+      }
+
+      if (alwaysGreat.length > 0 && activityAlwaysGreatList && activityAlwaysGreatTier) {
+        activityAlwaysGreatList.innerHTML = '';
+        for (const item of alwaysGreat) {
+          activityAlwaysGreatList.appendChild(renderActivityCard(item));
+        }
+        activityAlwaysGreatTier.hidden = false;
+      }
+
+      if (thisWeek.length === 0 && alwaysGreat.length === 0) {
+        if (activityStateEl && activityStateText) {
+          activityStateText.textContent = 'No activity suggestions available yet — check back soon.';
+          activityStateEl.hidden = false;
+        }
+      }
+
+      // Show refresh button once loaded.
+      if (activityRefreshBtn) activityRefreshBtn.hidden = false;
+    }
+
+    async function loadActivities() {
+      if (!activitySection) return;
+      try {
+        const url =
+          apiBase +
+          '/api/activities?slug=' +
+          encodeURIComponent(slug) +
+          '&token=' +
+          encodeURIComponent(token);
+        const res = await fetch(url, { headers: { Accept: 'application/json' } });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        renderActivities(data);
+      } catch (err) {
+        if (activityStateEl && activityStateText) {
+          activityStateText.textContent = 'Could not load activities — try refreshing the page.';
+          activityStateEl.hidden = false;
+          activitySection.hidden = false;
+        }
       }
     }
 

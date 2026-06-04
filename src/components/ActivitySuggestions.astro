@@ -1,0 +1,219 @@
+---
+// src/components/ActivitySuggestions.astro
+// Phase 7 — post-close activity suggestions widget (two tiers).
+// Hidden on SSR; the parent page IIFE populates after /api/activities resolves.
+//
+// Tiers:
+//   "Happening this week" — time-bound events (thisWeek array)
+//   "Always great"        — evergreen highlights (alwaysGreat array)
+//
+// Confidence badges per D-05:
+//   high   → no badge
+//   medium → ℹ verify dates
+//   low    → ⚠ check current schedule (dimmed card)
+---
+
+<section
+  id="activity-suggestions"
+  class="activity-suggestions"
+  hidden
+  aria-labelledby="activity-suggestions-title"
+>
+  <div class="activity-suggestions-header">
+    <h2 id="activity-suggestions-title" class="activity-suggestions-title">
+      Things to do
+    </h2>
+    <button
+      type="button"
+      class="activity-refresh-btn"
+      data-activities-refresh
+      hidden
+    >
+      Refresh
+    </button>
+  </div>
+
+  <div class="activity-demo-banner" data-activities-not-configured hidden>
+    <strong>Activity suggestions not configured.</strong>
+    Ask your organiser to add an Anthropic API key.
+  </div>
+
+  <div class="activity-state" data-activities-state hidden>
+    <p data-activities-state-text></p>
+  </div>
+
+  <div id="activity-this-week" class="activity-tier" hidden>
+    <h3 class="activity-tier-title">Happening this week</h3>
+    <ul class="activity-list" data-activities-this-week></ul>
+  </div>
+
+  <div id="activity-always-great" class="activity-tier" hidden>
+    <h3 class="activity-tier-title">Always great</h3>
+    <ul class="activity-list" data-activities-always-great></ul>
+  </div>
+</section>
+
+<style>
+  .activity-suggestions {
+    margin: 24px 0;
+    padding: 16px;
+    background: var(--color-surface, #fff);
+    border: 3px solid var(--color-on-background, #1c1b1f);
+    box-shadow: 4px 4px 0 var(--color-secondary, #625b71);
+  }
+
+  .activity-suggestions-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .activity-suggestions-title {
+    margin: 0;
+    font-family: var(--font-label, 'JetBrains Mono', monospace);
+    font-size: 14px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .activity-refresh-btn {
+    appearance: none;
+    border: 2px solid var(--color-on-background, #1c1b1f);
+    background: var(--color-secondary-container, #e8def8);
+    color: var(--color-on-secondary-container, #1d192b);
+    padding: 6px 12px;
+    font-family: var(--font-label, 'JetBrains Mono', monospace);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+  }
+
+  .activity-refresh-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .activity-demo-banner {
+    margin: 0 0 12px 0;
+    padding: 10px 12px;
+    font-size: 13px;
+    line-height: 1.4;
+    background: var(--color-surface-variant, #f3edf7);
+    border: 2px dashed var(--color-on-background, #1c1b1f);
+    color: var(--color-on-surface-variant, #49454f);
+  }
+
+  .activity-state {
+    margin: 0;
+    padding: 12px;
+    background: var(--color-surface-variant, #f3edf7);
+    border: 2px dashed var(--color-on-background, #1c1b1f);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .activity-tier {
+    margin-bottom: 16px;
+  }
+
+  .activity-tier:last-child {
+    margin-bottom: 0;
+  }
+
+  .activity-tier-title {
+    margin: 0 0 8px 0;
+    font-family: var(--font-label, 'JetBrains Mono', monospace);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-on-surface-variant, #49454f);
+  }
+
+  .activity-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 8px;
+  }
+
+  .activity-card {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 2px solid var(--color-on-background, #1c1b1f);
+    background: #fff;
+    align-items: start;
+  }
+
+  .activity-card.is-low-confidence {
+    opacity: 0.6;
+  }
+
+  .activity-icon {
+    font-size: 20px;
+    line-height: 1;
+    padding-top: 2px;
+  }
+
+  .activity-name {
+    font-size: 14px;
+    font-weight: 800;
+    margin: 0 0 3px 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .activity-confidence-badge {
+    display: inline-block;
+    padding: 1px 6px;
+    font-family: var(--font-label, 'JetBrains Mono', monospace);
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    border: 1.5px solid currentColor;
+    vertical-align: middle;
+  }
+
+  .activity-confidence-badge--medium {
+    color: var(--color-secondary, #625b71);
+    border-color: var(--color-secondary, #625b71);
+  }
+
+  .activity-confidence-badge--low {
+    color: var(--color-error, #b3261e);
+    border-color: var(--color-error, #b3261e);
+  }
+
+  .activity-meta {
+    font-size: 12px;
+    color: var(--color-on-surface-variant, #49454f);
+    margin: 0 0 4px 0;
+  }
+
+  .activity-why {
+    font-size: 13px;
+    margin: 0;
+    line-height: 1.45;
+  }
+
+  .activity-price {
+    display: inline-block;
+    margin-top: 4px;
+    font-family: var(--font-label, 'JetBrains Mono', monospace);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--color-on-surface-variant, #49454f);
+  }
+</style>
