@@ -117,6 +117,36 @@ const icalDownloadUrl = buildICalDownloadUrl({
           dateRangeEnd={poll.dateRangeEnd}
         />
       </div>
+
+      {/* #6 — date comments: short notes attached to a specific day. */}
+      <section id="comments-section" class="comments-section" hidden aria-labelledby="comments-title">
+        <h2 id="comments-title" class="comments-title">Notizen zu Terminen</h2>
+        <p class="comments-blurb">Kurze Notiz zu einem Tag — z.&nbsp;B. „kann nur abends".</p>
+        <form id="comment-form" class="comment-form">
+          <input
+            type="date"
+            id="comment-date"
+            class="comment-date"
+            min={poll.dateRangeStart}
+            max={poll.dateRangeEnd}
+            required
+            aria-label="Tag"
+          />
+          <input
+            type="text"
+            id="comment-text"
+            class="comment-text"
+            maxlength="200"
+            placeholder="Deine Notiz…"
+            required
+            aria-label="Notiz"
+          />
+          <button type="submit" class="comment-submit">Hinzufügen</button>
+        </form>
+        <p class="comment-error" id="comment-error" hidden></p>
+        <ul class="comment-list" id="comment-list"></ul>
+        <p class="comment-empty" id="comment-empty" hidden>Noch keine Notizen.</p>
+      </section>
     </div>
 
     {/* ── Section: Trip (post-close results) ────────────────────────── */}
@@ -315,6 +345,84 @@ const icalDownloadUrl = buildICalDownloadUrl({
     if (profileFormEl) {
       profileFormEl.addEventListener('submit', submitProfile);
     }
+
+    // ── #6: date comments ──────────────────────────────────────────────
+    const commentsSection = document.getElementById('comments-section');
+    const commentForm = document.getElementById('comment-form');
+    const commentDateEl = document.getElementById('comment-date');
+    const commentTextEl = document.getElementById('comment-text');
+    const commentListEl = document.getElementById('comment-list');
+    const commentEmptyEl = document.getElementById('comment-empty');
+    const commentErrorEl = document.getElementById('comment-error');
+
+    function fmtCommentDate(iso) {
+      try {
+        return new Date(iso + 'T00:00:00Z').toLocaleDateString('de-DE', {
+          weekday: 'short', day: '2-digit', month: 'short',
+        });
+      } catch (e) { return iso; }
+    }
+    function renderComments(comments) {
+      if (!commentsSection || !commentListEl) return;
+      commentsSection.hidden = false;
+      const list = Array.isArray(comments) ? comments : [];
+      // Group by date, sorted ascending; within a date keep server order.
+      const byDate = {};
+      for (const c of list) { (byDate[c.date] = byDate[c.date] || []).push(c); }
+      const dates = Object.keys(byDate).sort();
+      commentListEl.innerHTML = '';
+      if (commentEmptyEl) commentEmptyEl.hidden = dates.length > 0;
+      for (const d of dates) {
+        const li = document.createElement('li');
+        li.className = 'comment-day';
+        const h = document.createElement('p');
+        h.className = 'comment-day-date';
+        h.textContent = fmtCommentDate(d);
+        li.appendChild(h);
+        for (const c of byDate[d]) {
+          const row = document.createElement('div');
+          row.className = 'comment-item' + (c.isMine ? ' is-mine' : '');
+          const who = document.createElement('span');
+          who.className = 'comment-who';
+          who.textContent = c.isMine ? 'Du' : c.name;
+          const txt = document.createElement('span');
+          txt.className = 'comment-body';
+          txt.textContent = c.text;
+          row.appendChild(who);
+          row.appendChild(txt);
+          li.appendChild(row);
+        }
+        commentListEl.appendChild(li);
+      }
+    }
+    async function submitComment(e) {
+      if (e) e.preventDefault();
+      if (!commentDateEl || !commentTextEl) return;
+      const date = commentDateEl.value;
+      const text = commentTextEl.value.trim();
+      if (commentErrorEl) commentErrorEl.hidden = true;
+      if (!date || !text) return;
+      try {
+        const res = await fetch(apiBase + '/api/comment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ slug, token, date, text }),
+        });
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}));
+          throw new Error(j.error || 'HTTP ' + res.status);
+        }
+        commentTextEl.value = '';
+        showToast('Notiz gespeichert', 'ok');
+        await refreshState();
+      } catch (err) {
+        if (commentErrorEl) {
+          commentErrorEl.textContent = 'Konnte nicht speichern: ' + (err && err.message ? err.message : 'unbekannt');
+          commentErrorEl.hidden = false;
+        }
+      }
+    }
+    if (commentForm) commentForm.addEventListener('submit', submitComment);
 
     /** @param {string} msg @param {'saving'|'saved'|'error'|''} [kind] */
     function setStatus(msg, kind) {
@@ -594,6 +702,8 @@ const icalDownloadUrl = buildICalDownloadUrl({
 
       // Feature 8: participant progress indicator
       renderParticipantProgress(data);
+      // #6: date comments (refreshes with the 30s poll)
+      renderComments(data.comments);
     }
 
     /** Feature 7: find the Mon-Sun week with the most "yes" votes and highlight it */
@@ -1730,6 +1840,90 @@ const icalDownloadUrl = buildICalDownloadUrl({
     border: 1.5px solid var(--color-outline-variant, #cbd5e1);
     border-radius: var(--radius-lg, 16px);
   }
+  /* #6 — date comments */
+  .comments-section {
+    margin: 16px 0 0;
+    padding: 18px;
+    background: #fff;
+    border-radius: var(--radius-lg, 16px);
+    box-shadow: 0 2px 10px rgba(15, 23, 42, 0.07), 0 1px 3px rgba(15, 23, 42, 0.05);
+  }
+  .comments-title {
+    margin: 0 0 4px;
+    font-family: var(--font-headline, 'Bricolage Grotesque', sans-serif);
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--color-on-background, #0f172a);
+  }
+  .comments-blurb {
+    margin: 0 0 12px;
+    font-size: 13px;
+    color: var(--color-on-surface-variant, #475569);
+  }
+  .comment-form { display: flex; gap: 8px; flex-wrap: wrap; }
+  .comment-date, .comment-text {
+    padding: 9px 11px;
+    border: 1.5px solid var(--color-outline-variant, #cbd5e1);
+    border-radius: var(--radius-sm, 6px);
+    font-family: var(--font-body, 'DM Sans', system-ui, sans-serif);
+    font-size: 14px;
+    color: var(--color-on-background, #0f172a);
+    background: #fff;
+  }
+  .comment-text { flex: 1 1 160px; min-width: 0; }
+  .comment-date:focus-visible, .comment-text:focus-visible {
+    outline: 2px solid var(--color-primary, #0066cc);
+    outline-offset: 1px;
+    border-color: var(--color-primary, #0066cc);
+  }
+  .comment-submit {
+    padding: 9px 16px;
+    border: none;
+    border-radius: var(--radius-sm, 6px);
+    background: var(--color-primary, #0066cc);
+    color: #fff;
+    font-family: var(--font-body, 'DM Sans', system-ui, sans-serif);
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.12s;
+  }
+  .comment-submit:hover { background: #0052a3; }
+  .comment-error {
+    margin: 8px 0 0;
+    font-size: 13px;
+    color: var(--color-error, #ba1a1a);
+  }
+  .comment-list { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 14px; }
+  .comment-empty { margin: 14px 0 0; font-size: 13px; color: var(--color-on-surface-variant, #475569); }
+  .comment-day-date {
+    margin: 0 0 6px;
+    font-family: var(--font-body, 'DM Sans', system-ui, sans-serif);
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-on-surface-variant, #475569);
+  }
+  .comment-item {
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+    padding: 8px 12px;
+    border-radius: var(--radius-sm, 6px);
+    background: var(--color-surface-container-low, #eef4fb);
+    margin-bottom: 6px;
+  }
+  .comment-item.is-mine { background: var(--color-primary-fixed, #cce0ff); }
+  .comment-who {
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--color-primary, #0066cc);
+    flex-shrink: 0;
+  }
+  .comment-body { font-size: 14px; color: var(--color-on-background, #0f172a); line-height: 1.4; }
+
   .weather-emoji { font-size: 34px; line-height: 1; flex-shrink: 0; }
   .weather-body { min-width: 0; }
   .weather-title {

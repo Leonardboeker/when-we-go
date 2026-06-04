@@ -174,6 +174,66 @@ export class WhenWeGoPollDO extends DurableObject {
         notes            TEXT
       );
     `);
+    // #6 — short notes attached to a specific date ("kann nur abends").
+    // One row per comment; name is denormalised so the GET doesn't need the
+    // poll config to render. Capped per (token, date) at the handler layer.
+    this.sql.exec(`
+      CREATE TABLE IF NOT EXISTS date_comments (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        token       TEXT NOT NULL,
+        name        TEXT NOT NULL,
+        date        TEXT NOT NULL,
+        text        TEXT NOT NULL,
+        created_at  INTEGER NOT NULL
+      );
+    `);
+  }
+
+  // #6 — add a date comment. Returns the new comment's id.
+  addComment(token: string, name: string, date: string, text: string): { id: number } {
+    this.sql.exec(
+      `INSERT INTO date_comments (token, name, date, text, created_at)
+       VALUES (?, ?, ?, ?, ?)`,
+      token,
+      name,
+      date,
+      text,
+      Date.now()
+    );
+    const row = (
+      this.sql.exec(`SELECT last_insert_rowid() AS id`).toArray() as Array<{ id: number }>
+    )[0];
+    return { id: row?.id ?? 0 };
+  }
+
+  // #6 — all comments for this poll, newest first.
+  getComments(): Array<{ id: number; token: string; name: string; date: string; text: string; createdAt: number }> {
+    return (
+      this.sql
+        .exec(
+          `SELECT id, token, name, date, text, created_at
+           FROM date_comments ORDER BY created_at DESC`
+        )
+        .toArray() as Array<{ id: number; token: string; name: string; date: string; text: string; created_at: number }>
+    ).map((r) => ({
+      id: r.id,
+      token: r.token,
+      name: r.name,
+      date: r.date,
+      text: r.text,
+      createdAt: r.created_at,
+    }));
+  }
+
+  // #6 — how many comments a token already posted for a date (rate cap).
+  countCommentsFor(token: string, date: string): number {
+    return (
+      this.sql.exec(
+        `SELECT COUNT(*) AS n FROM date_comments WHERE token = ? AND date = ?`,
+        token,
+        date
+      ).toArray() as Array<{ n: number }>
+    )[0]?.n ?? 0;
   }
 
   // Bulk-replace votes for a token in one DO method call (CONTEXT A-04).

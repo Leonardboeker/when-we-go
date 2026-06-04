@@ -29,6 +29,7 @@ import { WhenWeGoPollDO, type Env } from './durable-object';
 import { Router } from './lib/router';
 import { corsHeaders, errorResponse, jsonResponse } from './lib/cors';
 import { handleVote } from './handlers/vote';
+import { handleComment } from './handlers/comment';
 import { handlePoll } from './handlers/poll';
 import { handleProfile } from './handlers/profile';
 import { handleAdminPoll } from './handlers/admin-poll';
@@ -68,6 +69,9 @@ router.get('/api/poll', (req, env, ctx) =>
 );
 router.post('/api/vote', (req, env, ctx) =>
   handleVote(req, env as Env, ctx)
+);
+router.post('/api/comment', (req, env, ctx) =>
+  handleComment(req, env as Env, ctx)
 );
 router.post('/api/profile', (req, env, ctx) =>
   handleProfile(req, env as Env, ctx)

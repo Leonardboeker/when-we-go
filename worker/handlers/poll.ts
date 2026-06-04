@@ -32,12 +32,13 @@ export async function handlePoll(
     env.WHENWEGO_POLL_DO.idFromName(slug)
   ) as unknown as DurableObjectStub<WhenWeGoPollDO>;
 
-  const [votes, closedAtRaw, overlapCacheRaw, history, profile] = await Promise.all([
+  const [votes, closedAtRaw, overlapCacheRaw, history, profile, comments] = await Promise.all([
     stub.getVotesForToken(token),
     stub.getMeta('closed_at'),
     stub.getMeta('overlap_cache'),
     stub.getVoterStatus(),
     stub.getProfile(token),
+    stub.getComments(), // #6
   ]);
 
   const closed = closedAtRaw !== null;
@@ -93,6 +94,14 @@ export async function handlePoll(
       closed,
       closedAt: closedAtIso,
       overlap,
+      // #6 — date comments (no token exposed; name + date + text + own flag).
+      comments: (comments as Array<{ token: string; name: string; date: string; text: string; createdAt: number }>).map((c) => ({
+        name: c.name,
+        date: c.date,
+        text: c.text,
+        createdAt: c.createdAt,
+        isMine: c.token === token,
+      })),
     },
     { status: 200, headers: { 'Cache-Control': 'no-store' } },
     req,
