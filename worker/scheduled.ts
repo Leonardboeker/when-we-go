@@ -24,6 +24,7 @@ import { fanOutReminders } from './lib/reminder-fanout';
 import { loadFlightsForParticipant } from './handlers/flights';
 import { loadHotelsForPoll } from './handlers/hotels';
 import { loadActivitiesForPoll } from './handlers/activities';
+import { fanOutClosePush } from './lib/push-fanout';
 
 const ALL_REMINDER_TYPES: ReminderType[] = ['T-30', 'T-7', 'T-1', 'T+1'];
 
@@ -139,6 +140,17 @@ export async function handleScheduled(
           ctx,
           awaitAll: false,
         });
+
+        // #9 — Web Push fan-out (best-effort, no-op without VAPID keys).
+        ctx.waitUntil(
+          fanOutClosePush({
+            env,
+            stub,
+            poll,
+            overlap,
+            siteUrl: env.WHENWEGO_SITE_URL || 'https://when-we-go-demo.pages.dev',
+          }).catch((err) => console.error(`[cron] push fan-out failed for ${poll.slug}`, err))
+        );
       }
     } catch (err) {
       console.error(`[cron] error processing poll ${poll.slug}`, err);

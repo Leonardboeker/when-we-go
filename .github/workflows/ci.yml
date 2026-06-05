@@ -44,3 +44,6 @@ jobs:
 
       - name: Overlap unit tests
         run: npm run test:overlap
+
+      - name: Web Push crypto round-trip
+        run: npm run test:webpush

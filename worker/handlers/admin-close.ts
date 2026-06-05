@@ -15,6 +15,7 @@ import { notifyPollClose } from '../lib/notify-pipeline';
 import { fanOutCloseSummaryEmails } from '../lib/close-email-fanout';
 import { computeTripStart } from '../lib/trip-date';
 import { loadFlightsForParticipant } from './flights';
+import { fanOutClosePush } from '../lib/push-fanout';
 
 export async function handleAdminClose(
   req: Request,
@@ -109,6 +110,17 @@ export async function handleAdminClose(
     ctx,
     awaitAll: false,
   });
+
+  // #9 — Web Push fan-out (best-effort, no-op without VAPID keys).
+  ctx.waitUntil(
+    fanOutClosePush({
+      env,
+      stub,
+      poll,
+      overlap,
+      siteUrl: env.WHENWEGO_SITE_URL || 'https://when-we-go-demo.pages.dev',
+    }).catch((err) => console.error('[admin-close] push fan-out failed', err))
+  );
 
   return jsonResponse(
     {

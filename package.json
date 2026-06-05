@@ -15,7 +15,8 @@
     "worker:dev": "wrangler dev --local",
     "worker:deploy": "wrangler deploy",
     "smoke": "node scripts/smoke-test.mjs",
-    "test:overlap": "node --test worker/lib/overlap.test.ts"
+    "test:overlap": "node --test worker/lib/overlap.test.ts",
+    "test:webpush": "node --test worker/lib/webpush.test.ts"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.0",

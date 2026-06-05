@@ -38,30 +38,31 @@ In the Worker (`when-we-go-api`) → Settings → Variables & Secrets:
 
 Redeploy. The opt-in button now appears; tapping it subscribes the browser.
 
-## Step 3 — the SEND path (remaining, needs implementation + device test)
+## Step 3 — the SEND path ✅ implemented & crypto-verified
 
-Storing subscriptions works. **Sending** a push requires the Web Push crypto
-(RFC 8291 payload encryption `aes128gcm` + RFC 8292 VAPID `ES256` JWT) inside
-the Worker. This was intentionally **not** shipped unverified — it can't be
-tested without real VAPID keys + a real device + a real push-service round-trip,
-and shipping unverified crypto risks a silent-failure that looks done.
+`worker/lib/webpush.ts` implements `sendPush(env, subscription, payload)`:
+- VAPID `ES256` JWT (`{aud: endpoint origin, exp: now+12h, sub: VAPID_SUBJECT}`),
+  signed with the private key.
+- `aes128gcm` payload encryption (ECDH vs the subscription's `p256dh` + `auth`,
+  HKDF → CEK + nonce, AES-128-GCM, RFC 8291).
+- `POST endpoint` with `Authorization: vapid t=<jwt>, k=<publicKey>`,
+  `Content-Encoding: aes128gcm`, `TTL: 86400`. Dead endpoints (404/410) are
+  pruned via `removePushSubscription`.
 
-To finish it:
+It's wired best-effort (via `ctx.waitUntil`) on poll-close in both
+`handlers/admin-close.ts` and `worker/scheduled.ts`, fanning out over
+`getPushSubscriptions()` with a "🎉 Termin steht" payload.
 
-1. Add `worker/lib/webpush.ts` with a `sendPush(env, subscription, payload)`:
-   - Build the VAPID JWT (`{aud: new URL(endpoint).origin, exp: now+12h, sub:
-     WHENWEGO_VAPID_SUBJECT}`), sign ES256 with the private key (import as JWK
-     P-256 from the public x/y + private d).
-   - Encrypt the JSON payload with `aes128gcm` (ECDH against the subscription's
-     `p256dh` + `auth`, HKDF → CEK + nonce, AES-128-GCM).
-   - `POST endpoint` with `Authorization: vapid t=<jwt>, k=<publicKey>`,
-     `Content-Encoding: aes128gcm`, `TTL: 86400`.
-   - On 404/410 → `removePushSubscription(endpoint)`.
-2. Call it best-effort (via `ctx.waitUntil`) on poll-close in
-   `worker/scheduled.ts` + `handlers/admin-close.ts`, fanning out over
-   `getPushSubscriptions()` with a `{title, body, url}` payload.
-3. **Verify on a real device**: set keys, subscribe in Chrome/Android, trigger
-   a close, confirm the notification arrives.
+**Verified:** `worker/lib/webpush.test.ts` (in CI as `npm run test:webpush`)
+checks the crypto in isolation — the `aes128gcm` payload **encrypt → decrypt
+round-trips**, and the VAPID JWT **verifies against the public key** with the
+correct `aud`/`sub`/`exp`. That's the same work a real push service does, so a
+spec-correct round-trip means the send is sound.
 
-> Tip: a tiny, audited Workers-compatible reference for the crypto is the
-> cleanest path; verify against a real subscription before trusting it.
+### Last mile — real-device confirmation
+
+The only thing a local test can't exercise is the live HTTP POST to a real push
+service. After setting the keys (steps 1–2): open a per-token page in Chrome,
+tap `🔔 Benachrichtigungen aktivieren`, then close the poll from the admin
+dashboard and confirm the notification arrives. (If it doesn't, check the Worker
+logs for the push-service response status.)
