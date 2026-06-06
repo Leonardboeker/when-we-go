@@ -980,16 +980,22 @@ const icalDownloadUrl = buildICalDownloadUrl({
       price.className = 'flight-card-price';
       price.textContent = '€' + Math.round(f.priceEur);
       right.appendChild(price);
-      // Book link — either Google Flights or pre-built URL
+      // Book link — prefer the provider deep-link (Kiwi bookingUrl), else a
+      // prefilled Google Flights search for the same route + date.
       const bookLink = document.createElement('a');
       bookLink.className = 'flight-card-book';
-      bookLink.textContent = 'Buchen →';
       bookLink.target = '_blank';
       bookLink.rel = 'noopener noreferrer';
-      const origin = (f.origin && f.origin.iata) ? f.origin.iata : '';
-      const dest = (window._flightDestIata) ? window._flightDestIata : '';
-      const depDate = (f.departureTimeLocal) ? f.departureTimeLocal.slice(0,10) : '';
-      bookLink.href = 'https://www.google.com/travel/flights?q=' + encodeURIComponent('Flights ' + origin + ' to ' + dest + (depDate ? ' ' + depDate : ''));
+      if (f.bookingUrl) {
+        bookLink.textContent = 'Buchen →';
+        bookLink.href = f.bookingUrl;
+      } else {
+        bookLink.textContent = 'Suchen →';
+        const origin = (window._flightOriginIata) ? window._flightOriginIata : '';
+        const dest = (window._flightDestIata) ? window._flightDestIata : '';
+        const depDate = (f.departureTimeLocal) ? f.departureTimeLocal.slice(0,10) : '';
+        bookLink.href = 'https://www.google.com/travel/flights?q=' + encodeURIComponent('Flights ' + origin + ' to ' + dest + (depDate ? ' ' + depDate : ''));
+      }
       right.appendChild(bookLink);
       li.appendChild(right);
       return li;
@@ -1049,9 +1055,15 @@ const icalDownloadUrl = buildICalDownloadUrl({
       const dIata = destination.iata || '';
       const start = dateRange.start || '';
       const end = dateRange.end || '';
+      const flights = (data && Array.isArray(data.flights)) ? data.flights : [];
+      // Expose route for the per-card fallback search link.
+      window._flightOriginIata = oIata;
+      window._flightDestIata = dIata;
 
-      // No fake prices → no "refresh prices" button, no DEMO banner.
-      if (flightRefreshBtn) flightRefreshBtn.hidden = true;
+      // Real provider (Kiwi public) returns genuine prices + booking links, so
+      // the refresh button stays; only the mock DEMO banner is suppressed.
+      const hasRealFlights = flights.length > 0;
+      if (flightRefreshBtn) flightRefreshBtn.hidden = !hasRealFlights;
       if (flightDemoBanner) flightDemoBanner.hidden = true;
       if (flightRestEl) flightRestEl.innerHTML = '';
       if (flightMoreEl) flightMoreEl.hidden = true;
@@ -1103,7 +1115,25 @@ const icalDownloadUrl = buildICalDownloadUrl({
         return;
       }
 
-      // Real deep-link card: route + Google Flights + Skyscanner.
+      // Real itineraries from the provider → render clickable flight cards
+      // (each with a "Buchen →" deep-link). Cheapest first; first one flagged.
+      if (hasRealFlights) {
+        flights.forEach(function (f, i) {
+          flightListEl.appendChild(renderFlightCard(f, i === 0));
+        });
+        // Plus an escape hatch to compare more options on Google Flights.
+        const compare = document.createElement('li');
+        compare.className = 'flight-deeplink-note';
+        const ca = document.createElement('a');
+        ca.target = '_blank'; ca.rel = 'noopener noreferrer';
+        ca.href = buildGoogleFlightsUrl(oIata, dIata, start, end);
+        ca.textContent = 'Mehr Optionen auf Google Flights →';
+        compare.appendChild(ca);
+        flightListEl.appendChild(compare);
+        return;
+      }
+
+      // Fallback (no itineraries found): route + Google Flights + Skyscanner.
       const li = document.createElement('li');
       li.className = 'flight-deeplink-card';
 

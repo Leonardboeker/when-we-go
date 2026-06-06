@@ -7,9 +7,10 @@
 // blocked on picking a replacement (Kiwi.com Tequila / Skyscanner Rapid /
 // Duffel), so this layer abstracts "where do flights come from".
 //
-// `MockFlightProvider` is the only impl wired today; it returns deterministic
-// fake results so the full downstream pipeline can be tested end-to-end.
-// A future real provider just adds one branch to `getFlightProvider`.
+// `KiwiPublicFlightProvider` (keyless Kiwi.com Skypicker GraphQL) is the
+// default REAL impl wired today; `KiwiFlightProvider` (Tequila) takes over when
+// WHENWEGO_KIWI_API_KEY is set. `MockFlightProvider` still exists for tests but
+// is no longer wired into the factory — real flights are the default now.
 //
 // Reason enum mirrors what callers (handlers, cron, email) already expected
 // from the old searchFlights() — kept stable so swapping the provider doesn't
@@ -59,6 +60,12 @@ export interface FlightOption {
   bookingHint: string;
   /** Provider attribution — UI gates DEMO banner on `source === 'mock'`. */
   source: FlightSource;
+  /**
+   * Absolute deep-link to book this exact itinerary (KiwiPublicFlightProvider
+   * populates it; mock/Tequila leave it undefined). UI + emails render a
+   * "Buchen" affordance when present, else fall back to a generic search link.
+   */
+  bookingUrl?: string;
 }
 
 export interface FlightSearchResult {
@@ -75,18 +82,23 @@ export interface FlightProvider {
 }
 
 /**
- * Single source of truth for "which provider is wired". Currently only
- * MockFlightProvider — future branches add real providers (gated on
- * matching env secret being present). Import via dynamic require to keep
- * the file dependency-graph forward-compatible.
+ * Single source of truth for "which provider is wired". Default is the keyless
+ * KiwiPublicFlightProvider (real flights, no secret); KiwiFlightProvider
+ * (Tequila) wins when WHENWEGO_KIWI_API_KEY is set. Future paid providers add
+ * their own branches gated on the matching env secret.
  */
-import { MockFlightProvider } from './flight-provider-mock.ts';
 import { KiwiFlightProvider } from './flight-provider-kiwi.ts';
+import { KiwiPublicFlightProvider } from './flight-provider-kiwi-public.ts';
 
 export function getFlightProvider(env: Env): FlightProvider {
+  // 1. If a Tequila API key is configured, prefer it (explicit opt-in).
   if (env.WHENWEGO_KIWI_API_KEY) return new KiwiFlightProvider(env.WHENWEGO_KIWI_API_KEY);
-  // Future:
+  // 2. Default REAL provider — keyless Kiwi.com public Skypicker GraphQL.
+  //    No env/secret needed; returns genuine itineraries + booking deep-links.
+  //    On any failure its searchFlights() resolves to reason:'provider_error'
+  //    (or throws, which the flights.ts wrapper catches → 'provider_error').
+  //   Future:
   //   if (env.WHENWEGO_SKYSCANNER_API_KEY) return new SkyscannerFlightProvider(env);
   //   if (env.WHENWEGO_DUFFEL_API_KEY) return new DuffelFlightProvider(env);
-  return new MockFlightProvider();
+  return new KiwiPublicFlightProvider();
 }

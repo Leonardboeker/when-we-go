@@ -80,14 +80,17 @@ function flightsCacheToEmailShape(
     to,
     carrier: f.airline,
     priceEur: Math.round(f.priceEur),
-    // Google Flights search prefilled with the route + dates — the closest
-    // thing to a deep link we can do on the Amadeus free tier.
-    url: buildGoogleFlightsUrl({
-      from,
-      to,
-      depart: cache.dateRange.start,
-      ret: cache.dateRange.end,
-    }),
+    // Prefer the provider's exact booking deep-link (Kiwi public provider sets
+    // bookingUrl). Fall back to a prefilled Google Flights search otherwise.
+    url:
+      f.bookingUrl && f.bookingUrl.length > 0
+        ? f.bookingUrl
+        : buildGoogleFlightsUrl({
+            from,
+            to,
+            depart: cache.dateRange.start,
+            ret: cache.dateRange.end,
+          }),
   }));
 }
 

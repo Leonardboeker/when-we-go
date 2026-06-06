@@ -75,9 +75,14 @@ function flightsCacheToEmailShape(
     to,
     carrier: f.airline,
     priceEur: Math.round(f.priceEur),
-    url: `https://www.google.com/travel/flights?q=${encodeURIComponent(
-      `Flights from ${from} to ${to} on ${cache.dateRange.start} returning ${cache.dateRange.end}`
-    )}`,
+    // Prefer the provider's exact booking deep-link (Kiwi public provider sets
+    // bookingUrl); fall back to a prefilled Google Flights search.
+    url:
+      f.bookingUrl && f.bookingUrl.length > 0
+        ? f.bookingUrl
+        : `https://www.google.com/travel/flights?q=${encodeURIComponent(
+            `Flights from ${from} to ${to} on ${cache.dateRange.start} returning ${cache.dateRange.end}`
+          )}`,
   }));
 }
 
