@@ -522,8 +522,8 @@ function buildReminderHtmlShell(
 ): string {
   const dest = p.poll.destination ?? p.poll.title;
   const orgAttribution = p.organiserName
-    ? `${esc(p.organiserName)} set up this poll for ${esc(dest)}.`
-    : `Someone set up a when-we-go poll for ${esc(dest)}.`;
+    ? `${esc(p.organiserName)} diese Abstimmung für ${esc(dest)} erstellt hat`
+    : `jemand eine when-we-go-Abstimmung für ${esc(dest)} erstellt hat`;
 
   const headerHtml = `
     <tr>
@@ -552,10 +552,10 @@ function buildReminderHtmlShell(
       <td style="padding:24px 24px 32px 24px;font-family:'Helvetica Neue',Arial,sans-serif;color:#666;font-size:12px;line-height:1.5;">
         <hr style="border:0;border-top:1px solid #ddd;margin:0 0 16px 0;" />
         <p style="margin:0 0 8px 0;">
-          <a href="${esc(p.participantPageUrl)}" style="color:#6750a4;font-weight:700;">View your trip page →</a>
+          <a href="${esc(p.participantPageUrl)}" style="color:#6750a4;font-weight:700;">Zur Reise-Seite →</a>
         </p>
         <p style="margin:0;">
-          You're getting this because ${orgAttribution}
+          Du bekommst diese Mail, weil ${orgAttribution}.
         </p>
       </td>
     </tr>
@@ -605,12 +605,12 @@ function buildReminderTextShell(p: ReminderShellParams): string {
     out.push(section);
     out.push('');
   }
-  out.push(`View your trip page: ${p.participantPageUrl}`);
+  out.push(`Zur Reise-Seite: ${p.participantPageUrl}`);
   out.push('');
   const orgAttribution = p.organiserName
-    ? `${p.organiserName} set up this poll for ${dest}.`
-    : `Someone set up a when-we-go poll for ${dest}.`;
-  out.push(`You're getting this because ${orgAttribution}`);
+    ? `${p.organiserName} diese Abstimmung für ${dest} erstellt hat`
+    : `jemand eine when-we-go-Abstimmung für ${dest} erstellt hat`;
+  out.push(`Du bekommst diese Mail, weil ${orgAttribution}.`);
   return out.join('\n');
 }
 
@@ -631,7 +631,7 @@ export interface T30Params {
 
 export function renderT30Email(params: T30Params): RenderedEmail {
   const dest = params.poll.destination ?? params.poll.title;
-  const subject = `🗓 ${dest} in 1 month — refreshed details`;
+  const subject = `🗓 ${dest} in 1 Monat — aktualisierte Infos`;
   const flights = params.flightsRefreshed ?? [];
   const hotels = params.hotels ?? [];
 
@@ -647,7 +647,7 @@ export function renderT30Email(params: T30Params): RenderedEmail {
               <strong>${esc(f.from)}</strong> → <strong>${esc(f.to)}</strong>
               ${f.carrier ? ` · ${esc(f.carrier)}` : ''}
               ${f.priceEur ? ` · €${f.priceEur}` : ''}
-              ${f.url ? ` · <a href="${esc(f.url)}" style="color:#6750a4;">book</a>` : ''}
+              ${f.url ? ` · <a href="${esc(f.url)}" style="color:#6750a4;">buchen</a>` : ''}
             </td>
           </tr>
         `
@@ -657,7 +657,7 @@ export function renderT30Email(params: T30Params): RenderedEmail {
       <tr>
         <td style="padding:20px 24px 8px 24px;font-family:'Helvetica Neue',Arial,sans-serif;color:#1c1b1f;">
           <h2 style="margin:0 0 12px 0;font-size:18px;font-weight:800;text-transform:uppercase;letter-spacing:0.04em;">
-            ✈️ Flights — refreshed today
+            ✈️ Flüge — heute aktualisiert
           </h2>
           <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
             ${rows}
@@ -666,7 +666,7 @@ export function renderT30Email(params: T30Params): RenderedEmail {
       </tr>
     `);
     bodyTextSections.push(
-      'Flights — refreshed today:\n' +
+      'Flüge — heute aktualisiert:\n' +
         flights
           .map(
             (f) =>
@@ -682,13 +682,13 @@ export function renderT30Email(params: T30Params): RenderedEmail {
       <tr>
         <td style="padding:20px 24px 8px 24px;font-family:'Helvetica Neue',Arial,sans-serif;color:#1c1b1f;">
           <p style="margin:0;font-size:14px;line-height:1.5;color:#666;">
-            Flight prices update soon — keep your eyes peeled. We'll send any big swings via Telegram if you set that up.
+            Die Flugpreise werden bald aktualisiert — halt die Augen offen. Bei größeren Preissprüngen melden wir uns per Telegram, falls du das eingerichtet hast.
           </p>
         </td>
       </tr>
     `);
     bodyTextSections.push(
-      'Flight prices update soon — keep your eyes peeled.'
+      'Die Flugpreise werden bald aktualisiert — halt die Augen offen.'
     );
   }
 
@@ -700,8 +700,8 @@ export function renderT30Email(params: T30Params): RenderedEmail {
             <td style="padding:8px 0;border-top:1px solid #eee;font-size:14px;">
               <strong>${esc(h.name)}</strong>
               ${h.area ? ` · ${esc(h.area)}` : ''}
-              ${h.pricePerNightEur ? ` · €${h.pricePerNightEur}/night` : ''}
-              ${h.url ? ` · <a href="${esc(h.url)}" style="color:#6750a4;">view</a>` : ''}
+              ${h.pricePerNightEur ? ` · €${h.pricePerNightEur}/Nacht` : ''}
+              ${h.url ? ` · <a href="${esc(h.url)}" style="color:#6750a4;">ansehen</a>` : ''}
             </td>
           </tr>
         `
@@ -711,7 +711,7 @@ export function renderT30Email(params: T30Params): RenderedEmail {
       <tr>
         <td style="padding:20px 24px 8px 24px;font-family:'Helvetica Neue',Arial,sans-serif;color:#1c1b1f;">
           <h2 style="margin:0 0 12px 0;font-size:18px;font-weight:800;text-transform:uppercase;letter-spacing:0.04em;">
-            🏨 Hotels we shortlisted
+            🏨 Hotels in der Auswahl
           </h2>
           <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
             ${rows}
@@ -720,12 +720,12 @@ export function renderT30Email(params: T30Params): RenderedEmail {
       </tr>
     `);
     bodyTextSections.push(
-      'Hotels we shortlisted:\n' +
+      'Hotels in der Auswahl:\n' +
         hotels
           .map(
             (h) =>
               `  ${h.name}${h.area ? ' · ' + h.area : ''}${
-                h.pricePerNightEur ? ' · €' + h.pricePerNightEur + '/night' : ''
+                h.pricePerNightEur ? ' · €' + h.pricePerNightEur + '/Nacht' : ''
               }${h.url ? ' [' + h.url + ']' : ''}`
           )
           .join('\n')
@@ -738,8 +738,8 @@ export function renderT30Email(params: T30Params): RenderedEmail {
     siteUrl: params.siteUrl,
     participantPageUrl: params.participantPageUrl,
     organiserName: params.organiserName,
-    headline: `Hey ${params.participant.name} — ${dest} in 1 month.`,
-    subheadline: 'Trip starts ' + params.tripStartIso + '. Quick refresh on prices + plans.',
+    headline: `Hey ${params.participant.name} — ${dest} in 1 Monat.`,
+    subheadline: 'Die Reise startet am ' + params.tripStartIso + '. Kurzes Update zu Preisen + Plänen.',
     bodyHtmlSections,
     bodyTextSections,
   };
@@ -769,7 +769,7 @@ export interface T7Params {
 
 export function renderT7Email(params: T7Params): RenderedEmail {
   const dest = params.poll.destination ?? params.poll.title;
-  const subject = `🎒 ${dest} next week — quick checklist`;
+  const subject = `🎒 ${dest} nächste Woche — kurze Checkliste`;
   const forecast = params.weatherForecast ?? null;
   const activities = params.activities ?? {};
 
@@ -806,14 +806,14 @@ export function renderT7Email(params: T7Params): RenderedEmail {
       <tr>
         <td style="padding:20px 24px 8px 24px;font-family:'Helvetica Neue',Arial,sans-serif;color:#1c1b1f;">
           <h2 style="margin:0 0 12px 0;font-size:18px;font-weight:800;text-transform:uppercase;letter-spacing:0.04em;">
-            🌤️ Weather forecast — ${esc(forecast.destination)}
+            🌤️ Wettervorhersage — ${esc(forecast.destination)}
           </h2>
           <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="font-size:13px;">
             <tr style="color:#666;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;">
-              <td style="padding:0 8px 6px 8px;">Date</td>
-              <td style="padding:0 8px 6px 8px;">Weather</td>
-              <td style="padding:0 8px 6px 8px;text-align:right;">Low / High</td>
-              <td style="padding:0 8px 6px 8px;text-align:right;">Rain</td>
+              <td style="padding:0 8px 6px 8px;">Datum</td>
+              <td style="padding:0 8px 6px 8px;">Wetter</td>
+              <td style="padding:0 8px 6px 8px;text-align:right;">Tief / Hoch</td>
+              <td style="padding:0 8px 6px 8px;text-align:right;">Regen</td>
             </tr>
             ${rows}
           </table>
@@ -821,14 +821,14 @@ export function renderT7Email(params: T7Params): RenderedEmail {
       </tr>
     `);
     bodyTextSections.push(
-      `Weather forecast — ${forecast.destination}:\n` +
+      `Wettervorhersage — ${forecast.destination}:\n` +
         forecast.daily
           .map(
             (d) =>
               `  ${d.date}: ${weatherCodeLabel(d.weatherCode)} ` +
               `${d.tempMinC !== null ? Math.round(d.tempMinC) + '°' : '—'} / ` +
               `${d.tempMaxC !== null ? Math.round(d.tempMaxC) + '°' : '—'} · ` +
-              `rain ${d.precipProbPct !== null ? Math.round(d.precipProbPct) + '%' : '—'}`
+              `Regen ${d.precipProbPct !== null ? Math.round(d.precipProbPct) + '%' : '—'}`
           )
           .join('\n')
     );
@@ -837,32 +837,32 @@ export function renderT7Email(params: T7Params): RenderedEmail {
       <tr>
         <td style="padding:20px 24px 8px 24px;font-family:'Helvetica Neue',Arial,sans-serif;color:#1c1b1f;">
           <p style="margin:0;font-size:14px;line-height:1.5;color:#666;">
-            We couldn't pull a fresh weather forecast for ${esc(dest)} this week — check your favourite weather app for ${esc(params.tripStartIso)}.
+            Wir konnten diese Woche keine aktuelle Wettervorhersage für ${esc(dest)} laden — schau für den ${esc(params.tripStartIso)} in deine bevorzugte Wetter-App.
           </p>
         </td>
       </tr>
     `);
     bodyTextSections.push(
-      `We couldn't pull a fresh weather forecast for ${dest} this week — check your favourite weather app for ${params.tripStartIso}.`
+      `Wir konnten diese Woche keine aktuelle Wettervorhersage für ${dest} laden — schau für den ${params.tripStartIso} in deine bevorzugte Wetter-App.`
     );
   }
 
   // Packing checklist — generic, no API
   const packing = [
-    'Passport / ID',
-    'Phone charger + adapter',
-    'Weather-appropriate clothes (see forecast above)',
-    'Comfortable walking shoes',
-    'Reusable water bottle',
-    'Medications + small first-aid kit',
-    'Cash + cards',
-    'Travel insurance details',
+    'Reisepass / Ausweis',
+    'Handy-Ladegerät + Adapter',
+    'Wetterfeste Kleidung (siehe Vorhersage oben)',
+    'Bequeme Schuhe zum Laufen',
+    'Wiederverwendbare Trinkflasche',
+    'Medikamente + kleine Reiseapotheke',
+    'Bargeld + Karten',
+    'Reiseversicherungs-Unterlagen',
   ];
   bodyHtmlSections.push(`
     <tr>
       <td style="padding:20px 24px 8px 24px;font-family:'Helvetica Neue',Arial,sans-serif;color:#1c1b1f;">
         <h2 style="margin:0 0 12px 0;font-size:18px;font-weight:800;text-transform:uppercase;letter-spacing:0.04em;">
-          🎒 Packing checklist
+          🎒 Packliste
         </h2>
         <ul style="margin:0 0 0 18px;padding:0;font-size:14px;line-height:1.6;">
           ${packing.map((p) => `<li>${esc(p)}</li>`).join('')}
@@ -871,7 +871,7 @@ export function renderT7Email(params: T7Params): RenderedEmail {
     </tr>
   `);
   bodyTextSections.push(
-    'Packing checklist:\n' + packing.map((p) => `  - ${p}`).join('\n')
+    'Packliste:\n' + packing.map((p) => `  - ${p}`).join('\n')
   );
 
   // Activities reminder (only if non-empty)
@@ -884,14 +884,14 @@ export function renderT7Email(params: T7Params): RenderedEmail {
       <tr>
         <td style="padding:20px 24px 8px 24px;font-family:'Helvetica Neue',Arial,sans-serif;color:#1c1b1f;">
           <h2 style="margin:0 0 12px 0;font-size:18px;font-weight:800;text-transform:uppercase;letter-spacing:0.04em;">
-            🎭 Things to do
+            🎭 Aktivitäten
           </h2>
           <ul style="margin:0 0 0 18px;padding:0;font-size:14px;line-height:1.5;">
             ${allActs
               .map(
                 (a) =>
                   `<li>${esc(a.name)}${
-                    a.url ? ` · <a href="${esc(a.url)}" style="color:#6750a4;">info</a>` : ''
+                    a.url ? ` · <a href="${esc(a.url)}" style="color:#6750a4;">Info</a>` : ''
                   }</li>`
               )
               .join('')}
@@ -900,7 +900,7 @@ export function renderT7Email(params: T7Params): RenderedEmail {
       </tr>
     `);
     bodyTextSections.push(
-      'Things to do:\n' +
+      'Aktivitäten:\n' +
         allActs.map((a) => `  - ${a.name}${a.url ? ' [' + a.url + ']' : ''}`).join('\n')
     );
   }
@@ -911,8 +911,8 @@ export function renderT7Email(params: T7Params): RenderedEmail {
     siteUrl: params.siteUrl,
     participantPageUrl: params.participantPageUrl,
     organiserName: params.organiserName,
-    headline: `Hey ${params.participant.name} — ${dest} next week.`,
-    subheadline: 'Trip starts ' + params.tripStartIso + '. Time to pack.',
+    headline: `Hey ${params.participant.name} — ${dest} nächste Woche.`,
+    subheadline: 'Die Reise startet am ' + params.tripStartIso + '. Zeit zu packen.',
     bodyHtmlSections,
     bodyTextSections,
   };
@@ -941,7 +941,7 @@ export interface T1Params {
 
 export function renderT1Email(params: T1Params): RenderedEmail {
   const dest = params.poll.destination ?? params.poll.title;
-  const subject = `✈️ ${dest} tomorrow!`;
+  const subject = `✈️ ${dest} morgen!`;
 
   const bodyHtmlSections: string[] = [];
   const bodyTextSections: string[] = [];
@@ -956,18 +956,18 @@ export function renderT1Email(params: T1Params): RenderedEmail {
       <tr>
         <td style="padding:20px 24px 8px 24px;font-family:'Helvetica Neue',Arial,sans-serif;color:#1c1b1f;">
           <h2 style="margin:0 0 12px 0;font-size:18px;font-weight:800;text-transform:uppercase;letter-spacing:0.04em;">
-            🏨 Where you're staying
+            🏨 Wo du wohnst
           </h2>
           <p style="margin:0 0 6px 0;font-size:16px;font-weight:700;">${esc(h.name)}</p>
           ${h.area ? `<p style="margin:0 0 6px 0;font-size:14px;color:#666;">${esc(h.area)}</p>` : ''}
           <p style="margin:8px 0 0 0;font-size:14px;">
-            <a href="${esc(mapsUrl)}" style="color:#6750a4;font-weight:700;">Open in Google Maps →</a>
+            <a href="${esc(mapsUrl)}" style="color:#6750a4;font-weight:700;">In Google Maps öffnen →</a>
           </p>
         </td>
       </tr>
     `);
     bodyTextSections.push(
-      `Where you're staying: ${h.name}${h.area ? ' · ' + h.area : ''}\nMaps: ${mapsUrl}`
+      `Wo du wohnst: ${h.name}${h.area ? ' · ' + h.area : ''}\nMaps: ${mapsUrl}`
     );
   }
 
@@ -976,33 +976,33 @@ export function renderT1Email(params: T1Params): RenderedEmail {
     <tr>
       <td style="padding:20px 24px 8px 24px;font-family:'Helvetica Neue',Arial,sans-serif;color:#1c1b1f;">
         <h2 style="margin:0 0 12px 0;font-size:18px;font-weight:800;text-transform:uppercase;letter-spacing:0.04em;">
-          🚇 Getting there
+          🚇 Anreise
         </h2>
         <p style="margin:0;font-size:14px;line-height:1.5;color:#444;">
-          Most cities have a metro or bus from the city centre to the airport —
-          give yourself 90 minutes door-to-door including security. Save the
-          boarding pass to your phone wallet or print it tonight.
+          In den meisten Städten fährt eine Metro oder ein Bus vom Zentrum zum
+          Flughafen — plan 90 Minuten von Tür zu Tür ein, inklusive Sicherheitskontrolle.
+          Speicher den Boarding-Pass in deinem Handy-Wallet oder druck ihn heute Abend aus.
         </p>
       </td>
     </tr>
   `);
   bodyTextSections.push(
-    "Getting there:\n  Most cities have a metro or bus from the city centre to the airport — give yourself 90 minutes door-to-door. Save your boarding pass to your phone wallet or print it tonight."
+    "Anreise:\n  In den meisten Städten fährt eine Metro oder ein Bus vom Zentrum zum Flughafen — plan 90 Minuten von Tür zu Tür ein. Speicher deinen Boarding-Pass in deinem Handy-Wallet oder druck ihn heute Abend aus."
   );
 
   // Final checklist
   const finalChecklist = [
-    'Boarding pass saved / printed',
-    'Hotel address screenshot (offline-readable)',
-    'Phone fully charged + power bank',
-    'Travel-insurance details in inbox',
-    'Wallet, passport, keys, charger — final sweep tonight',
+    'Boarding-Pass gespeichert / ausgedruckt',
+    'Screenshot der Hotel-Adresse (offline lesbar)',
+    'Handy voll geladen + Powerbank',
+    'Reiseversicherungs-Unterlagen im Postfach',
+    'Geldbeutel, Reisepass, Schlüssel, Ladegerät — heute Abend final checken',
   ];
   bodyHtmlSections.push(`
     <tr>
       <td style="padding:20px 24px 8px 24px;font-family:'Helvetica Neue',Arial,sans-serif;color:#1c1b1f;">
         <h2 style="margin:0 0 12px 0;font-size:18px;font-weight:800;text-transform:uppercase;letter-spacing:0.04em;">
-          ✅ Final checks
+          ✅ Letzte Checks
         </h2>
         <ul style="margin:0 0 0 18px;padding:0;font-size:14px;line-height:1.6;">
           ${finalChecklist.map((c) => `<li>${esc(c)}</li>`).join('')}
@@ -1011,7 +1011,7 @@ export function renderT1Email(params: T1Params): RenderedEmail {
     </tr>
   `);
   bodyTextSections.push(
-    'Final checks:\n' + finalChecklist.map((c) => `  - ${c}`).join('\n')
+    'Letzte Checks:\n' + finalChecklist.map((c) => `  - ${c}`).join('\n')
   );
 
   const shell: ReminderShellParams = {
@@ -1020,8 +1020,8 @@ export function renderT1Email(params: T1Params): RenderedEmail {
     siteUrl: params.siteUrl,
     participantPageUrl: params.participantPageUrl,
     organiserName: params.organiserName,
-    headline: `${dest} tomorrow, ${params.participant.name}!`,
-    subheadline: 'Final details inside.',
+    headline: `${dest} morgen, ${params.participant.name}!`,
+    subheadline: 'Letzte Details hier.',
     bodyHtmlSections,
     bodyTextSections,
   };
@@ -1048,7 +1048,7 @@ export interface TPlus1Params {
 
 export function renderTPlus1Email(params: TPlus1Params): RenderedEmail {
   const dest = params.poll.destination ?? params.poll.title;
-  const subject = `Hope ${dest} was great. Want to plan another?`;
+  const subject = `War ${dest} schön? Lust auf die nächste Reise?`;
 
   const bodyHtmlSections: string[] = [];
   const bodyTextSections: string[] = [];
@@ -1057,23 +1057,23 @@ export function renderTPlus1Email(params: TPlus1Params): RenderedEmail {
     <tr>
       <td style="padding:20px 24px 8px 24px;font-family:'Helvetica Neue',Arial,sans-serif;color:#1c1b1f;">
         <p style="margin:0 0 16px 0;font-size:15px;line-height:1.6;">
-          Hope it was great. If anything went memorably right (or wrong), tell ${
-            params.organiserName ? esc(params.organiserName) : 'your organiser'
-          } so the next trip improves on this one.
+          Hoffentlich war's schön. Wenn etwas besonders gut (oder schief) gelaufen ist, sag ${
+            params.organiserName ? esc(params.organiserName) : 'deinem Organisator'
+          } Bescheid, damit die nächste Reise noch besser wird.
         </p>
         <p style="margin:0;font-size:15px;line-height:1.6;">
-          Want to plan another? Open a fresh when-we-go poll any time —
+          Lust auf die nächste Reise? Starte jederzeit eine neue when-we-go-Abstimmung —
           <a href="${esc(params.siteUrl)}/" style="color:#6750a4;font-weight:700;">${esc(params.siteUrl)}</a>.
         </p>
       </td>
     </tr>
   `);
   bodyTextSections.push(
-    `Hope it was great. If anything went memorably right (or wrong), tell ${
-      params.organiserName ?? 'your organiser'
-    } so the next trip improves on this one.`
+    `Hoffentlich war's schön. Wenn etwas besonders gut (oder schief) gelaufen ist, sag ${
+      params.organiserName ?? 'deinem Organisator'
+    } Bescheid, damit die nächste Reise noch besser wird.`
   );
-  bodyTextSections.push(`Want to plan another? ${params.siteUrl}/`);
+  bodyTextSections.push(`Lust auf die nächste Reise? ${params.siteUrl}/`);
 
   const shell: ReminderShellParams = {
     poll: params.poll,
@@ -1081,8 +1081,8 @@ export function renderTPlus1Email(params: TPlus1Params): RenderedEmail {
     siteUrl: params.siteUrl,
     participantPageUrl: params.participantPageUrl,
     organiserName: params.organiserName,
-    headline: `Welcome back, ${params.participant.name}.`,
-    subheadline: `Hope ${dest} delivered.`,
+    headline: `Willkommen zurück, ${params.participant.name}.`,
+    subheadline: `Hoffentlich hat ${dest} geliefert.`,
     bodyHtmlSections,
     bodyTextSections,
   };
