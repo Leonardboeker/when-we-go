@@ -34,10 +34,16 @@ export interface Env {
   WHENWEGO_AMADEUS_CLIENT_SECRET?: string;
   WHENWEGO_AMADEUS_ENV?: string;
   // Phase 7 — Anthropic Claude API key for activity suggestions.
-  // When unset, getActivityProvider() returns the MockActivityProvider
-  // (deterministic per-destination evergreen lookup). When set, the real
-  // ClaudeActivityProvider drives structured-output calls to Haiku.
+  // When unset, getActivityProvider() falls back to the keyless real
+  // WikimediaActivityProvider (Wikipedia geosearch + pageviews). When set, the
+  // ClaudeActivityProvider drives structured-output calls to Haiku instead.
   WHENWEGO_ANTHROPIC_API_KEY?: string;
+  // Optional — OpenTripMap API key (free tier, no credit card:
+  // https://opentripmap.io/product). When set, WikimediaActivityProvider may
+  // use OpenTripMap for categorised+rated POIs as the primary candidate list,
+  // then attach Wikimedia/Openverse photos. The provider works fully WITHOUT
+  // this key (Wikipedia-only path is the default).
+  WHENWEGO_OPENTRIPMAP_API_KEY?: string;
   // #9 — Web Push (VAPID). Both optional: when EITHER is missing the push
   // pipeline is fully off (subscribe endpoint 503s, no UI prompt, no sends).
   // Generate with: npx web-push generate-vapid-keys

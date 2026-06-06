@@ -1533,20 +1533,34 @@ const icalDownloadUrl = buildICalDownloadUrl({
       li.className = 'activity-card';
       if (item.confidence === 'low') li.classList.add('is-low');
 
+      // Primary "ansehen" link: real Wikipedia/official page when present,
+      // else a Google Maps lookup. The whole card is wrapped in this link so
+      // the photo + name are clickable (matches the hotel-card feel).
+      var photoSrc = item.photoUrl || item.imageUrl;
+      var primaryHref = item.link || item.bookingUrl ||
+        (item.mapsUrl ||
+          ('https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(item.name)));
+
+      var card = document.createElement('a');
+      card.href = primaryHref;
+      card.target = '_blank';
+      card.rel = 'noopener noreferrer';
+      card.className = 'activity-card-link';
+
       // Photo
-      if (item.imageUrl) {
+      if (photoSrc) {
         const img = document.createElement('img');
-        img.src = item.imageUrl;
+        img.src = photoSrc;
         img.alt = item.name;
         img.loading = 'lazy';
-        img.style.cssText = 'grid-column:1/-1;width:100%;height:130px;object-fit:cover;border-radius:4px;display:block;';
-        li.appendChild(img);
+        img.style.cssText = 'grid-column:1/-1;width:calc(100% + 24px);height:140px;object-fit:cover;border-radius:6px 6px 0 0;display:block;margin:-12px -12px 8px;';
+        card.appendChild(img);
       }
 
       const icon = document.createElement('div');
       icon.className = 'activity-card-icon';
       icon.textContent = ACTIVITY_ICONS[item.type] || ACTIVITY_ICONS.other;
-      li.appendChild(icon);
+      card.appendChild(icon);
 
       const body = document.createElement('div');
       body.className = 'activity-card-body';
@@ -1558,11 +1572,14 @@ const icalDownloadUrl = buildICalDownloadUrl({
       name.style.margin = '0';
       name.textContent = item.name;
       nameRow.appendChild(name);
-      // Price badge inline with name
-      const priceTag = document.createElement('span');
-      priceTag.style.cssText = 'font-size:12px;font-weight:700;white-space:nowrap;color:' + (item.paid ? '#0f172a' : '#16a34a');
-      priceTag.textContent = item.paid ? (typeof item.priceEur === 'number' ? '€' + item.priceEur : 'Kostenpflichtig') : 'Gratis';
-      nameRow.appendChild(priceTag);
+      // Price badge inline with name. Wikimedia POIs carry no pricing signal,
+      // so we suppress the badge there rather than claim a misleading "Gratis".
+      if (item.source !== 'wikimedia') {
+        const priceTag = document.createElement('span');
+        priceTag.style.cssText = 'font-size:12px;font-weight:700;white-space:nowrap;color:' + (item.paid ? '#0f172a' : '#16a34a');
+        priceTag.textContent = item.paid ? (typeof item.priceEur === 'number' ? '€' + item.priceEur : 'Kostenpflichtig') : 'Gratis';
+        nameRow.appendChild(priceTag);
+      }
       body.appendChild(nameRow);
 
       const why = document.createElement('p');
@@ -1587,27 +1604,45 @@ const icalDownloadUrl = buildICalDownloadUrl({
         body.appendChild(badge);
       }
 
-      // Booking link
-      if (item.bookingUrl) {
-        const link = document.createElement('a');
-        link.href = item.bookingUrl;
-        link.target = '_blank';
-        link.rel = 'noopener noreferrer';
-        link.textContent = 'Mehr Info →';
-        link.style.cssText = 'display:inline-block;margin-top:6px;font-size:12px;font-weight:600;color:#0066cc;text-decoration:none;';
-        body.appendChild(link);
-      } else {
-        // Google Maps fallback
-        const mapsLink = document.createElement('a');
-        mapsLink.href = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(item.name);
-        mapsLink.target = '_blank';
-        mapsLink.rel = 'noopener noreferrer';
-        mapsLink.textContent = 'Google Maps →';
-        mapsLink.style.cssText = 'display:inline-block;margin-top:6px;font-size:12px;font-weight:600;color:#0066cc;text-decoration:none;';
-        body.appendChild(mapsLink);
+      // Action row: primary "Ansehen" + a small "Karte" link to maps.
+      const actions = document.createElement('div');
+      actions.style.cssText = 'display:flex;gap:12px;align-items:center;margin-top:6px;';
+
+      const seeLabel = document.createElement('span');
+      seeLabel.textContent = item.link ? 'Ansehen →' : (item.bookingUrl ? 'Mehr Info →' : 'Auf Karte →');
+      seeLabel.style.cssText = 'font-size:12px;font-weight:600;color:#0066cc;';
+      actions.appendChild(seeLabel);
+
+      // Separate "Karte" deep-link (nested <a> would be invalid, so stop the
+      // card-link navigation and open maps in a new tab from the click).
+      var mapsHref = item.mapsUrl ||
+        ((typeof item.lat === 'number' && typeof item.lng === 'number')
+          ? ('https://www.google.com/maps/search/?api=1&query=' + item.lat + ',' + item.lng)
+          : null);
+      if (mapsHref && item.link) {
+        const mapBtn = document.createElement('span');
+        mapBtn.textContent = '📍 Karte';
+        mapBtn.setAttribute('role', 'link');
+        mapBtn.style.cssText = 'font-size:12px;font-weight:600;color:#475569;cursor:pointer;';
+        mapBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          window.open(mapsHref, '_blank', 'noopener,noreferrer');
+        });
+        actions.appendChild(mapBtn);
+      }
+      body.appendChild(actions);
+
+      // Photo attribution (Openverse CC fallback only) — tiny, honours licence.
+      if (item.photoAttribution) {
+        const attr = document.createElement('p');
+        attr.textContent = 'Foto: ' + item.photoAttribution;
+        attr.style.cssText = 'margin:4px 0 0;font-size:9px;color:#94a3b8;';
+        body.appendChild(attr);
       }
 
-      li.appendChild(body);
+      card.appendChild(body);
+      li.appendChild(card);
       return li;
     }
 
