@@ -1,6 +1,7 @@
 {
   "_doc": "Phase 9 — hand-curated lat/lon table for Open-Meteo weather lookups. Keys are matched fuzzily (case-insensitive substring); the first match wins, so list more-specific names first if collisions arise. Coordinates ≈ city center.",
   "cities": [
+    { "name": "Kopenhagen", "lat": 55.6761, "lon": 12.5683 },
     { "name": "Copenhagen", "lat": 55.6761, "lon": 12.5683 },
     { "name": "Stockholm", "lat": 59.3293, "lon": 18.0686 },
     { "name": "Oslo", "lat": 59.9139, "lon": 10.7522 },
