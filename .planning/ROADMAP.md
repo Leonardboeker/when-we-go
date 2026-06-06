@@ -312,6 +312,16 @@ This ordering lets the email + calendar layer ship first (your explicit ask), wi
 
 **Total real-time: ~12 days of focused work** spread across however many weekends. All hosting €0.
 
+### Phase 11: Live-Gruppen-Ansicht im Kalender waehrend offener Abstimmung
+
+**Goal:** Während der offenen Abstimmung im Kalender pro Tag sehen, wer (welche Teilnehmer) kann — Gruppen-Verfügbarkeit live, nicht erst nach Poll-Schluss.
+**Requirements**: Server liefert pro-Tag-Aggregat über alle Teilnehmer auch bei offener Poll; Client rendert Gruppen-Indikator pro Tag zusätzlich zur eigenen Stimme; live via bestehendem 30s-Refresh.
+**Depends on:** Phasen 1-3 (Kalender, Vote-Persistenz, Close-Logik), Phase 4 (Teilnehmer/Profile)
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 11 to break down)
+
 ---
 
 ## Status field key

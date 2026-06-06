@@ -32,13 +32,14 @@ export async function handlePoll(
     env.WHENWEGO_POLL_DO.idFromName(slug)
   ) as unknown as DurableObjectStub<WhenWeGoPollDO>;
 
-  const [votes, closedAtRaw, overlapCacheRaw, history, profile, comments] = await Promise.all([
+  const [votes, closedAtRaw, overlapCacheRaw, history, profile, comments, allVotes] = await Promise.all([
     stub.getVotesForToken(token),
     stub.getMeta('closed_at'),
     stub.getMeta('overlap_cache'),
     stub.getVoterStatus(),
     stub.getProfile(token),
     stub.getComments(), // #6
+    stub.getAllVotes(), // Phase 11: live group availability
   ]);
 
   const closed = closedAtRaw !== null;
@@ -69,6 +70,18 @@ export async function handlePoll(
     voteCount: voterStatusByToken.get(p.token) ?? 0,
   }));
 
+  // Phase 11: live group availability — every participant's vote per day, by
+  // NAME only (tokens are never exposed). Lets each viewer see who can make it
+  // on which day while the poll is still open. Deliberate transparency for the
+  // family-poll use case (user-confirmed).
+  const nameByToken = new Map(poll.participants.map((p) => [p.token, p.name]));
+  const groupVotes: Record<string, Array<{ name: string; state: string }>> = {};
+  for (const v of allVotes as VoteRecord[]) {
+    const name = nameByToken.get(v.token);
+    if (!name) continue; // skip votes from removed/unknown tokens
+    (groupVotes[v.date] ??= []).push({ name, state: v.state });
+  }
+
   return jsonResponse(
     {
       poll: {
@@ -91,6 +104,7 @@ export async function handlePoll(
         state: v.state,
       })),
       voterStatus,
+      groupVotes, // Phase 11: per-day votes by name (no tokens)
       closed,
       closedAt: closedAtIso,
       overlap,

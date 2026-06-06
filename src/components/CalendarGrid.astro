@@ -271,6 +271,32 @@ const WEEKDAY_LABELS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
     background: #ffffff;
   }
 
+  /* ── Phase 11: live group availability dots ──────────────────────────────
+     The cell FILL is the viewer's own vote. These small dots show OTHER
+     participants' votes for the day (green/amber/red), live. A light ring
+     keeps them readable on any fill colour. */
+  .cell-voter-dots {
+    position: absolute;
+    bottom: 3px;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: center;
+    gap: 3px;
+    pointer-events: none;
+    line-height: 0;
+  }
+  .voter-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #94a3b8;
+    box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.85);
+  }
+  .voter-dot.is-yes { background: #16a34a; }
+  .voter-dot.is-maybe { background: #f59e0b; }
+  .voter-dot.is-no { background: #dc2626; }
+
   /* Weekend override — voted states take over completely */
   .cell-yes.is-weekend,
   .cell-maybe.is-weekend,

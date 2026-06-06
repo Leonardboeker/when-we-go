@@ -224,6 +224,9 @@ const icalDownloadUrl = buildICalDownloadUrl({
     let pollInterval = null;
     /** @type {AbortController | null} */
     let inflightAbort = null;
+    /** Phase 11: per-day group votes by name {date: [{name, state}]}, + viewer's name */
+    let groupVotesData = Object.create(null);
+    let viewerName = '';
 
     const grid = document.querySelector('.calendar-grid');
     const statusEl = document.querySelector('[data-calendar-status]');
@@ -566,6 +569,48 @@ const icalDownloadUrl = buildICalDownloadUrl({
       return STATES[(idx + 1) % STATES.length];
     }
 
+    // ── Phase 11: live group availability ──────────────────────────────────
+    const STATE_SYMBOL = { yes: '✓', maybe: '?', no: '✗' };
+    const MONTHS_DE = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
+      'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+    /** @param {string} iso */
+    function formatDateDE(iso) {
+      const p = iso.split('-');
+      return parseInt(p[2], 10) + '. ' + (MONTHS_DE[parseInt(p[1], 10) - 1] || '');
+    }
+
+    /** Render per-day dots for OTHER participants (own vote = cell background). */
+    function renderGroupVotes() {
+      grid.querySelectorAll('.cell-voter-dots').forEach((el) => el.remove());
+      for (const date of Object.keys(groupVotesData)) {
+        const others = (groupVotesData[date] || []).filter((v) => v.name !== viewerName);
+        if (others.length === 0) continue;
+        const cell = grid.querySelector('.calendar-cell-day[data-date="' + date + '"]');
+        if (!cell) continue;
+        const wrap = document.createElement('span');
+        wrap.className = 'cell-voter-dots';
+        wrap.setAttribute('aria-hidden', 'true');
+        wrap.title = others.map((v) => v.name + ' ' + (STATE_SYMBOL[v.state] || '')).join(', ');
+        for (const v of others) {
+          const dot = document.createElement('span');
+          dot.className = 'voter-dot is-' + v.state;
+          wrap.appendChild(dot);
+        }
+        cell.appendChild(wrap);
+      }
+    }
+
+    /** Build "Papa ✓, Schwester ?, Du ✓" for one day (for the tap toast). */
+    function groupSummaryFor(date) {
+      const merged = (groupVotesData[date] || []).filter((v) => v.name !== viewerName);
+      const own = voteState[date];
+      if (own && own !== 'unset') merged.push({ name: 'Du', state: own });
+      if (merged.length === 0) return '';
+      const order = { yes: 0, maybe: 1, no: 2 };
+      merged.sort((a, b) => (order[a.state] - order[b.state]));
+      return merged.map((v) => v.name + ' ' + (STATE_SYMBOL[v.state] || '')).join(', ');
+    }
+
     function scheduleSave() {
       if (saveTimer) clearTimeout(saveTimer);
       setStatus('Speichert…', 'saving');
@@ -624,6 +669,9 @@ const icalDownloadUrl = buildICalDownloadUrl({
       voteState[date] = ns;
       applyCellClass(cell, ns);
       scheduleSave();
+      // Phase 11: show who else can make it on this day
+      const summary = groupSummaryFor(date);
+      if (summary) showToast(formatDateDE(date) + ' — ' + summary, 'info');
     }
 
     grid.addEventListener('click', (e) => {
@@ -688,6 +736,9 @@ const icalDownloadUrl = buildICalDownloadUrl({
      */
     function applyServerState(data) {
       closed = !!data.closed;
+      // Phase 11: stash group votes + viewer name for live per-day dots.
+      viewerName = (data.viewer && data.viewer.name) || '';
+      groupVotesData = data.groupVotes || Object.create(null);
 
       // Calendar-first: the calendar is ALWAYS visible so anyone can vote
       // immediately — voting is never gated on the profile. The profile
@@ -780,6 +831,8 @@ const icalDownloadUrl = buildICalDownloadUrl({
       renderParticipantProgress(data);
       // #6: date comments (refreshes with the 30s poll)
       renderComments(data.comments);
+      // Phase 11: live per-day group dots (refreshes with the 30s poll)
+      renderGroupVotes();
     }
 
     /** Feature 7: find the Mon-Sun week with the most "yes" votes and highlight it */

@@ -42,6 +42,9 @@
 
 ## Recent activity log
 
+- 2026-06-06 — Phase 11 hinzugefügt + gebaut: Live-Gruppen-Ansicht im Kalender (Punkte pro Tag = andere Teilnehmer, Namen beim Antippen, live via 30s-Refresh). Server: `groupVotes` in `poll.ts`. Client: `renderGroupVotes`/`groupSummaryFor` in `[token].astro` + Dot-CSS in `CalendarGrid.astro`.
+- 2026-06-06 — Live-Fixes: neuer Build deployed (CF Pages war nicht git-verbunden), German+DM-Sans (Monospace raus), 404 modernisiert, Kalender-first (Profil-Gate entfernt), kopenhagen-2026 Worker-Secret gesetzt.
+
 - 2026-05-28 — Project initialised. MVP scope: date polling only.
 - 2026-05-28 — Real driver: Leo + sister + father + brother → Copenhagen trip.
 - 2026-05-28 — Phase 1 (Foundation) shipped.
