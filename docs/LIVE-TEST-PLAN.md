@@ -10,13 +10,13 @@ Konstanten für dieses Poll:
 Worker-API : https://when-we-go-api.ancient-base-f94c.workers.dev
 Seite      : https://when-we-go-demo.pages.dev
 Slug       : kopenhagen-2026
-Organizer  : yx3yQoCw-SOXpJ9vYuEvLw     (X-Organizer-Token, geheim halten)
+Organizer  : <ORGANIZER_TOKEN>     (X-Organizer-Token, geheim halten)
 
 Links (1 pro Person):
-  Leo       /kopenhagen-2026/nsa8r2VM9B2BLLq1/
-  Schwester /kopenhagen-2026/CT123_ktA8IeJO59/
-  Papa      /kopenhagen-2026/8DvfzE5tuxfXIa3S/
-  Bruder    /kopenhagen-2026/0BcMPG8fNMZ4OOqw/
+  Leo       /kopenhagen-2026/<LEO_TOKEN>/
+  Schwester /kopenhagen-2026/<SCHWESTER_TOKEN>/
+  Papa      /kopenhagen-2026/<PAPA_TOKEN>/
+  Bruder    /kopenhagen-2026/<BRUDER_TOKEN>/
 ```
 
 ---
@@ -75,7 +75,7 @@ nach dem Wert (einfügen + Enter). Worker wird automatisch neu deployt.
 
 **Tun:** Test-Daten löschen (votes + Zähler + Profile):
 ```bash
-curl -X POST "https://when-we-go-api.ancient-base-f94c.workers.dev/api/admin/wipe?slug=kopenhagen-2026&confirm=DELETE" -H "X-Organizer-Token: yx3yQoCw-SOXpJ9vYuEvLw"
+curl -X POST "https://when-we-go-api.ancient-base-f94c.workers.dev/api/admin/wipe?slug=kopenhagen-2026&confirm=DELETE" -H "X-Organizer-Token: <ORGANIZER_TOKEN>"
 ```
 **✓ Erwartung:** JSON `{"ok":true,"wiped":true,...}`. Danach zeigt jeder Link
 einen leeren Kalender und „0 von 4 haben abgestimmt".
@@ -107,7 +107,7 @@ an die Person).
 ### Schritt 3.4 — Poll schließen (Test: sofort statt 20. Juni)
 **Tun:** Force-Close als Organizer:
 ```bash
-curl -X POST "https://when-we-go-api.ancient-base-f94c.workers.dev/api/admin/close?slug=kopenhagen-2026" -H "X-Organizer-Token: yx3yQoCw-SOXpJ9vYuEvLw"
+curl -X POST "https://when-we-go-api.ancient-base-f94c.workers.dev/api/admin/close?slug=kopenhagen-2026" -H "X-Organizer-Token: <ORGANIZER_TOKEN>"
 ```
 **✓ Erwartung:** JSON ok. Auf den Links: Banner „Abstimmung beendet · Beste Daten:
 … → …", Kalender read-only, automatischer Wechsel zum **Reise**-Tab.
@@ -138,14 +138,14 @@ und erneut schließen (3.4 nach reopen 3.8), auf Resend-Antwort/Statuscode achte
 ### Schritt 3.7 — Daten-Integrität (was wirklich gespeichert ist)
 **Tun:** Kompletten Datenbestand als JSON ziehen:
 ```bash
-curl "https://when-we-go-api.ancient-base-f94c.workers.dev/api/admin/export?slug=kopenhagen-2026" -H "X-Organizer-Token: yx3yQoCw-SOXpJ9vYuEvLw"
+curl "https://when-we-go-api.ancient-base-f94c.workers.dev/api/admin/export?slug=kopenhagen-2026" -H "X-Organizer-Token: <ORGANIZER_TOKEN>"
 ```
 **✓ Erwartung:** Votes, Profile (echte Mails), Kommentare stimmen mit dem überein,
 was ihr getippt habt. Keine Fremd-/Fantasiedaten.
 
 ### Schritt 3.8 — Wieder öffnen (um erneut zu testen)
 ```bash
-curl -X POST "https://when-we-go-api.ancient-base-f94c.workers.dev/api/admin/reopen?slug=kopenhagen-2026" -H "X-Organizer-Token: yx3yQoCw-SOXpJ9vYuEvLw"
+curl -X POST "https://when-we-go-api.ancient-base-f94c.workers.dev/api/admin/reopen?slug=kopenhagen-2026" -H "X-Organizer-Token: <ORGANIZER_TOKEN>"
 ```
 **✓ Erwartung:** Poll ist wieder offen, abstimmbar.
 
