@@ -173,6 +173,20 @@ const icalDownloadUrl = buildICalDownloadUrl({
           <p class="weather-sub" id="weather-sub"></p>
         </div>
       </div>
+      {/* Interactive map (Leaflet + OpenStreetMap, keyless). Hidden until the
+          IIFE has hotel/activity coords to plot; lazy-loads Leaflet on first
+          trip-tab activation. Sits above the flight/hotel/activity cards. */}
+      <section id="trip-map-section" class="trip-map-section" hidden aria-labelledby="trip-map-title">
+        <div class="trip-map-header">
+          <h2 id="trip-map-title" class="trip-map-title">Auf der Karte</h2>
+          <div class="trip-map-legend" aria-hidden="true">
+            <span class="trip-map-legend-item"><span class="trip-map-dot trip-map-dot--hotel"></span>Hotels</span>
+            <span class="trip-map-legend-item"><span class="trip-map-dot trip-map-dot--activity"></span>Aktivitäten</span>
+          </div>
+        </div>
+        <div id="trip-map" class="trip-map"></div>
+        <p class="trip-map-attribution">Karte © OpenStreetMap-Mitwirkende · Leaflet</p>
+      </section>
       <FlightOptions />
       <HotelShortlist mode="participant" />
       <ActivitiesList />
@@ -1386,6 +1400,9 @@ const icalDownloadUrl = buildICalDownloadUrl({
       const chosenHotelId = data && data.chosenHotelId;
       const voteTallies = (data && data.voteTallies) || {};
 
+      // Feed the interactive map with the same hotel set the cards use.
+      setMapHotels(reason === 'ok' ? hotels : []);
+
       if (hotelDemoBanner) {
         hotelDemoBanner.hidden = !(provider && provider.isReal === false);
       }
@@ -1654,6 +1671,10 @@ const icalDownloadUrl = buildICalDownloadUrl({
       const provider = data && data.provider;
       const destination = data && data.destination;
 
+      // Feed the interactive map with the same activity set the cards use.
+      var allActs = (activities.thisWeek || []).concat(activities.alwaysGreat || []);
+      setMapActivities(reason === 'ok' ? allActs : []);
+
       if (activitiesDemoBanner) {
         activitiesDemoBanner.hidden = !(provider && provider.isReal === false);
       }
@@ -1720,6 +1741,194 @@ const icalDownloadUrl = buildICalDownloadUrl({
       } finally {
         if (activitiesSkeleton) activitiesSkeleton.hidden = true;
       }
+    }
+
+    // ─── Interactive map (Leaflet + OpenStreetMap, keyless) ───────────────
+    // Free, no API key. Leaflet (CSS+JS) is loaded lazily from the unpkg CDN
+    // the first time we actually have trip data to plot (i.e. on the Reise tab
+    // after the poll closes) so other tabs stay lean. Hotels (blue) and
+    // activities (orange) get distinct divIcon pins; clicking a pin opens a
+    // popup with a thumbnail + a real link. Items without lat/lng are skipped;
+    // if nothing has coords the whole section stays hidden. Everything here is
+    // defensive: it never throws if Leaflet is slow/absent or the container is
+    // missing, and the map is built at most once.
+    var LEAFLET_CSS = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    var LEAFLET_JS = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    var LEAFLET_CSS_SRI = 'sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=';
+    var LEAFLET_JS_SRI = 'sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=';
+
+    var mapHotels = [];
+    var mapActivities = [];
+    var mapHotelsReady = false;
+    var mapActivitiesReady = false;
+    var leafletPromise = null;
+    var tripMap = null;
+    var tripMapBuilt = false;
+
+    function hasCoords(o) {
+      return o && typeof o.lat === 'number' && typeof o.lng === 'number' &&
+        isFinite(o.lat) && isFinite(o.lng);
+    }
+
+    function setMapHotels(list) {
+      mapHotels = Array.isArray(list) ? list.filter(hasCoords) : [];
+      mapHotelsReady = true;
+      tryBuildTripMap();
+    }
+    function setMapActivities(list) {
+      mapActivities = Array.isArray(list) ? list.filter(hasCoords) : [];
+      mapActivitiesReady = true;
+      tryBuildTripMap();
+    }
+
+    // Inject Leaflet CSS+JS once; resolve when window.L is available. Never
+    // rejects — on load failure it resolves with the (still-undefined) global
+    // so callers just no-op via the window.L guard.
+    function ensureLeaflet() {
+      if (leafletPromise) return leafletPromise;
+      leafletPromise = new Promise(function (resolve) {
+        if (window.L) { resolve(window.L); return; }
+        try {
+          if (!document.querySelector('link[data-leaflet]')) {
+            var link = document.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = LEAFLET_CSS;
+            link.integrity = LEAFLET_CSS_SRI;
+            link.crossOrigin = '';
+            link.setAttribute('data-leaflet', '1');
+            document.head.appendChild(link);
+          }
+          var existing = document.querySelector('script[data-leaflet]');
+          if (existing) {
+            existing.addEventListener('load', function () { resolve(window.L); });
+            existing.addEventListener('error', function () { resolve(window.L); });
+            if (window.L) resolve(window.L);
+            return;
+          }
+          var s = document.createElement('script');
+          s.src = LEAFLET_JS;
+          s.integrity = LEAFLET_JS_SRI;
+          s.crossOrigin = '';
+          s.async = true;
+          s.setAttribute('data-leaflet', '1');
+          s.addEventListener('load', function () { resolve(window.L); });
+          s.addEventListener('error', function () { resolve(window.L); });
+          document.head.appendChild(s);
+        } catch (e) {
+          resolve(window.L);
+        }
+      });
+      return leafletPromise;
+    }
+
+    // Coloured teardrop pin via divIcon (keyless — no marker image needed).
+    function makePin(L, color) {
+      return L.divIcon({
+        className: '',
+        html: '<span style="display:block;width:18px;height:18px;border-radius:50% 50% 50% 0;' +
+          'background:' + color + ';border:2px solid #fff;box-shadow:0 1px 4px rgba(15,23,42,0.5);' +
+          'transform:rotate(-45deg);"></span>',
+        iconSize: [18, 18],
+        iconAnchor: [9, 18],
+        popupAnchor: [0, -18],
+      });
+    }
+
+    // Escape user/provider strings before they go into popup innerHTML.
+    function esc(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function popupHtml(name, imgUrl, linkUrl, linkLabel) {
+      var html = '<div style="max-width:200px">';
+      if (imgUrl) {
+        html += '<img src="' + esc(imgUrl) + '" alt="" loading="lazy" ' +
+          'style="width:100%;height:90px;object-fit:cover;border-radius:6px;display:block;margin-bottom:6px"/>';
+      }
+      html += '<strong style="font-size:13px;display:block;line-height:1.3">' + esc(name) + '</strong>';
+      if (linkUrl) {
+        html += '<a href="' + esc(linkUrl) + '" target="_blank" rel="noopener noreferrer" ' +
+          'style="display:inline-block;margin-top:6px;font-size:12px;font-weight:700;color:#0066cc;text-decoration:none">' +
+          esc(linkLabel) + '</a>';
+      }
+      html += '</div>';
+      return html;
+    }
+
+    // Optional nice-to-have: scroll to + briefly highlight the matching card.
+    function highlightCard(selector) {
+      try {
+        var el = document.querySelector(selector);
+        if (!el) return;
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.add('trip-map-flash');
+        setTimeout(function () { el.classList.remove('trip-map-flash'); }, 1600);
+      } catch (e) { /* non-fatal */ }
+    }
+
+    // Build the map once both datasets have reported in and Leaflet is ready.
+    function tryBuildTripMap() {
+      if (tripMapBuilt) return;
+      if (!mapHotelsReady || !mapActivitiesReady) return; // wait for both loads
+      if (mapHotels.length === 0 && mapActivities.length === 0) {
+        var sec0 = document.getElementById('trip-map-section');
+        if (sec0) sec0.hidden = true; // nothing to plot
+        return;
+      }
+      ensureLeaflet().then(function (L) {
+        if (!L || tripMapBuilt) return; // CDN failed → silently skip the map
+        var section = document.getElementById('trip-map-section');
+        var container = document.getElementById('trip-map');
+        if (!section || !container) return; // container absent → no-op
+        try {
+          section.hidden = false;
+          tripMap = L.map(container, { scrollWheelZoom: false, attributionControl: true });
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; OpenStreetMap contributors',
+          }).addTo(tripMap);
+
+          var hotelIcon = makePin(L, '#0066cc');
+          var actIcon = makePin(L, '#ea580c');
+          var bounds = [];
+
+          mapHotels.forEach(function (h) {
+            var m = L.marker([h.lat, h.lng], { icon: hotelIcon, title: h.name }).addTo(tripMap);
+            m.bindPopup(popupHtml(h.name, h.imageUrl, h.bookingUrl, 'Buchen →'));
+            if (h.hotelId) {
+              m.on('click', function () {
+                highlightCard('.hotel-card[data-hotel-id="' + (window.CSS && CSS.escape ? CSS.escape(h.hotelId) : h.hotelId) + '"]');
+              });
+            }
+            bounds.push([h.lat, h.lng]);
+          });
+
+          mapActivities.forEach(function (a) {
+            var img = a.photoUrl || a.imageUrl;
+            var link = a.link || a.bookingUrl || a.mapsUrl;
+            var m = L.marker([a.lat, a.lng], { icon: actIcon, title: a.name }).addTo(tripMap);
+            m.bindPopup(popupHtml(a.name, img, link, 'Ansehen →'));
+            bounds.push([a.lat, a.lng]);
+          });
+
+          if (bounds.length === 1) {
+            tripMap.setView(bounds[0], 14);
+          } else if (bounds.length > 1) {
+            tripMap.fitBounds(bounds, { padding: [30, 30], maxZoom: 15 });
+          }
+          // Leaflet measures size at init; if the tab was hidden the container
+          // had 0 height. Recompute once it is visible.
+          setTimeout(function () { if (tripMap) tripMap.invalidateSize(); }, 120);
+          tripMapBuilt = true;
+        } catch (e) {
+          // Never let a map error kill the rest of the trip view.
+          if (tripMap && tripMap.remove) { try { tripMap.remove(); } catch (e2) {} }
+          tripMap = null;
+          if (section) section.hidden = true;
+        }
+      });
     }
 
     // ── Feature 2: typical weather for destination + trip dates ──
@@ -1937,6 +2146,19 @@ const icalDownloadUrl = buildICalDownloadUrl({
       if (document.visibilityState === 'visible') refreshState();
     });
 
+    // When the Reise tab is (re)opened, the map container may have been hidden
+    // (0px) at init — recompute Leaflet's size so tiles fill the box. The nav
+    // button exists at parse time, so this binds reliably (unlike the deferred
+    // window.__switchToTripTab from BottomNav). Also pre-warms Leaflet so the
+    // map is ready the moment trip data lands.
+    var tripTabBtn = document.querySelector('.bottom-nav-tab[data-tab="trip"]');
+    if (tripTabBtn) {
+      tripTabBtn.addEventListener('click', function () {
+        ensureLeaflet();
+        setTimeout(function () { if (tripMap) tripMap.invalidateSize(); }, 160);
+      });
+    }
+
     refreshState();
   })();
 </script>
@@ -1953,6 +2175,84 @@ const icalDownloadUrl = buildICalDownloadUrl({
   }
   /* Section visibility — JS in BottomNav toggles data-section via hidden attr */
   .page-section[hidden] { display: none; }
+
+  /* ── Interactive map (Leaflet + OSM) — see #trip-map in the Reise tab ── */
+  .trip-map-section {
+    margin: 16px 0;
+    padding: 18px;
+    background: #fff;
+    border-radius: var(--radius-lg, 16px);
+    box-shadow: 0 2px 10px rgba(15,23,42,0.07), 0 1px 3px rgba(15,23,42,0.05);
+  }
+  .trip-map-section[hidden] { display: none; }
+  .trip-map-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+  .trip-map-title {
+    margin: 0;
+    font-family: var(--font-headline, 'Bricolage Grotesque', sans-serif);
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--color-on-background, #0f172a);
+    letter-spacing: -0.01em;
+  }
+  .trip-map-legend {
+    display: flex;
+    gap: 14px;
+    font-size: 12px;
+    color: var(--color-on-surface-variant, #475569);
+  }
+  .trip-map-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .trip-map-dot {
+    width: 11px;
+    height: 11px;
+    border-radius: 99px;
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 1px rgba(15,23,42,0.25);
+    flex-shrink: 0;
+  }
+  .trip-map-dot--hotel { background: #0066cc; }
+  .trip-map-dot--activity { background: #ea580c; }
+  .trip-map {
+    width: 100%;
+    height: 280px;
+    border-radius: var(--radius-sm, 8px);
+    overflow: hidden;
+    background: var(--color-surface-container-low, #eef4fb);
+    /* Keep Leaflet panes below the fixed bottom-nav (z-index 40). */
+    z-index: 0;
+  }
+  .trip-map :global(.leaflet-container) {
+    font-family: var(--font-body, 'DM Sans', system-ui, sans-serif);
+  }
+  .trip-map-attribution {
+    margin: 8px 0 0;
+    font-size: 10px;
+    color: var(--color-on-surface-variant, #94a3b8);
+  }
+  /* Keep Leaflet's own panes/controls (default z-index 400-700) under the
+     fixed bottom-nav (z-index 40) — :global because Leaflet injects them. */
+  .trip-map :global(.leaflet-pane),
+  .trip-map :global(.leaflet-top),
+  .trip-map :global(.leaflet-bottom) { z-index: 1; }
+  .trip-map :global(.leaflet-popup) { z-index: 5; }
+  /* Brief highlight when a map marker points at its card below. */
+  .trip-map-flash {
+    animation: tripMapFlash 1.6s ease;
+  }
+  @keyframes tripMapFlash {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(0,102,204,0); }
+    20% { box-shadow: 0 0 0 3px rgba(0,102,204,0.55); }
+  }
 
   /* Profile tab header */
   .profile-tab-header {

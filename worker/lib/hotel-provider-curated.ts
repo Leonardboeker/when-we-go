@@ -26,6 +26,10 @@ interface CuratedHotel {
   amenities: string[];
   /** Representative Unsplash photo (category-appropriate). */
   imageUrl: string;
+  /** Real latitude (WGS84) of the hotel — drives the Leaflet map marker. */
+  lat: number;
+  /** Real longitude (WGS84) of the hotel — see `lat`. */
+  lng: number;
 }
 
 // Keyed by lowercase city substring (matches destinationCity / poll.destination).
@@ -38,6 +42,9 @@ const CURATED: Record<string, CuratedHotel[]> = {
       area: 'Vesterbro, am Hauptbahnhof',
       amenities: ['Spa', 'Rooftop-Pool', 'Restaurant', 'WLAN'],
       imageUrl: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=600&h=340&fit=crop',
+      // Tietgensgade 35-39, next to København H.
+      lat: 55.6705,
+      lng: 12.5636,
     },
     {
       name: 'Nimb Hotel',
@@ -46,6 +53,9 @@ const CURATED: Record<string, CuratedHotel[]> = {
       area: 'Im Tivoli-Garten',
       amenities: ['Rooftop-Terrasse', 'Fine Dining', 'Bar', 'WLAN'],
       imageUrl: 'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?w=600&h=340&fit=crop',
+      // Bernstorffsgade 5, inside Tivoli Gardens.
+      lat: 55.6738,
+      lng: 12.5681,
     },
     {
       name: 'Hotel SP34 (Brøchner)',
@@ -54,6 +64,9 @@ const CURATED: Record<string, CuratedHotel[]> = {
       area: 'Latinerkvarteret (Altstadt)',
       amenities: ['Weinstunde', 'Bar', 'Fahrradverleih', 'WLAN'],
       imageUrl: 'https://images.unsplash.com/photo-1455587734955-081b22074882?w=600&h=340&fit=crop',
+      // Sankt Peders Straede 34, Latin Quarter.
+      lat: 55.6796,
+      lng: 12.5688,
     },
     {
       name: 'Axel Guldsmeden',
@@ -62,6 +75,9 @@ const CURATED: Record<string, CuratedHotel[]> = {
       area: 'Vesterbro (Bio/Eco)',
       amenities: ['Bio-Frühstück', 'Spa', 'Eco-zertifiziert', 'WLAN'],
       imageUrl: 'https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?w=600&h=340&fit=crop',
+      // Helgolandsgade 11, Vesterbro.
+      lat: 55.6723,
+      lng: 12.5575,
     },
     {
       name: 'Coco Hotel',
@@ -70,6 +86,9 @@ const CURATED: Record<string, CuratedHotel[]> = {
       area: 'Vesterbro',
       amenities: ['Innenhof', 'Bar', 'Design', 'WLAN'],
       imageUrl: 'https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=600&h=340&fit=crop',
+      // Vesterbrogade 41, Vesterbro.
+      lat: 55.6716,
+      lng: 12.5544,
     },
     {
       name: 'Generator Copenhagen',
@@ -78,6 +97,9 @@ const CURATED: Record<string, CuratedHotel[]> = {
       area: 'City / Nørreport (Budget/Hostel)',
       amenities: ['Bar', 'Lounge', 'Günstig', 'WLAN'],
       imageUrl: 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=600&h=340&fit=crop',
+      // Adelgade 5-7, near Kongens Nytorv / Norreport.
+      lat: 55.6817,
+      lng: 12.5826,
     },
   ],
 };
@@ -120,6 +142,10 @@ export class CuratedHotelProvider implements HotelProvider {
       imageUrl: h.imageUrl,
       bookingUrl: bookingUrl(h.name, city, input),
       priceUnknown: true,
+      // Real coords drive the Leaflet map marker; undefined for future
+      // non-geocoded curated cities (the map skips markers without coords).
+      lat: h.lat,
+      lng: h.lng,
       // No invented prices — these stay 0 and the UI shows "Preis live ansehen".
       totalPriceEur: 0,
       nightlyPriceEur: 0,

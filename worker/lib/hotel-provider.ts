@@ -61,6 +61,11 @@ export interface HotelOption {
   bookingUrl?: string;
   /** Curated real hotels carry no in-app price — UI shows "Preis live ansehen". */
   priceUnknown?: boolean;
+  /** Latitude (WGS84) — present for curated hotels; drives the Leaflet map
+   *  marker. Undefined for non-geocoded / future non-curated cities. */
+  lat?: number;
+  /** Longitude (WGS84) — see `lat`. Markers are skipped when either is absent. */
+  lng?: number;
   totalPriceEur: number;
   nightlyPriceEur: number;
   perPersonEur: number;
