@@ -113,11 +113,10 @@ const icalDownloadUrl = buildICalDownloadUrl({
       </div>
       {/* Phase 8: add-to-calendar buttons */}
       <EmailButtons />
-      {/* Phase 4: profile gate */}
-      <div id="profile-gate" hidden>
-        <ProfileForm />
-      </div>
-      <div id="calendar-gate" hidden>
+      {/* Calendar-first: voting is never gated. Profile (email + home airport)
+          is optional and lives in the Profil tab — it only personalises the
+          flight suggestions, it never blocks voting. */}
+      <div id="calendar-gate">
         <CalendarGrid
           dateRangeStart={poll.dateRangeStart}
           dateRangeEnd={poll.dateRangeEnd}
@@ -690,25 +689,21 @@ const icalDownloadUrl = buildICalDownloadUrl({
     function applyServerState(data) {
       closed = !!data.closed;
 
-      // Phase 4 gating: profile complete → calendar visible; otherwise show form.
-      // The form pre-fills from any partial profile so returning users see their
-      // last input.
+      // Calendar-first: the calendar is ALWAYS visible so anyone can vote
+      // immediately — voting is never gated on the profile. The profile
+      // (email + home airport) is optional and lives in the Profil tab; it
+      // only personalises the flight suggestions on the Reise tab.
       const profile = data && data.viewer && data.viewer.profile;
-      if (isProfileComplete(profile)) {
-        showCalendar();
-      } else {
-        // Pre-populate inputs with whatever profile state exists.
-        if (profile) {
-          const emailEl = document.getElementById('profile-email');
-          const airportEl = document.getElementById('profile-airport');
-          const cityEl = document.getElementById('profile-airport-city');
-          if (emailEl && profile.email) emailEl.value = profile.email;
-          if (airportEl && profile.homeAirport) airportEl.value = profile.homeAirport;
-          if (cityEl && profile.homeCity) cityEl.value = profile.homeCity;
-        }
-        showProfileForm();
-        // No further state work needed — user must complete profile first.
-        return;
+      showCalendar();
+      // Pre-populate the Profil-tab inputs with whatever profile state exists,
+      // so returning users see their last input.
+      if (profile) {
+        const emailEl = document.getElementById('profile-email');
+        const airportEl = document.getElementById('profile-airport');
+        const cityEl = document.getElementById('profile-airport-city');
+        if (emailEl && profile.email) emailEl.value = profile.email;
+        if (airportEl && profile.homeAirport) airportEl.value = profile.homeAirport;
+        if (cityEl && profile.homeCity) cityEl.value = profile.homeCity;
       }
 
       for (const v of data.votes || []) {
