@@ -44,29 +44,29 @@ for (const week of weeks) {
   rows.push({ kind: 'week', week });
 }
 
-const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const WEEKDAY_LABELS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 ---
 
 <section
   class="calendar-grid"
-  aria-label="Date availability grid"
+  aria-label="Kalender — wähl deine verfügbaren Tage"
   data-poll-start={dateRangeStart}
   data-poll-end={dateRangeEnd}
 >
-  <div class="calendar-how-it-works" aria-label="How voting works">
-    <span class="how-label">TAP TO VOTE</span>
+  <div class="calendar-how-it-works" aria-label="So funktioniert das Abstimmen">
+    <span class="how-label">Tippen zum Abstimmen</span>
     <span class="how-sep">—</span>
     <span class="calendar-legend">
-      <span class="calendar-legend-item"><span class="calendar-legend-swatch swatch-yes"></span> Yes</span>
-      <span class="calendar-legend-item"><span class="calendar-legend-swatch swatch-maybe"></span> Maybe</span>
-      <span class="calendar-legend-item"><span class="calendar-legend-swatch swatch-no"></span> No</span>
+      <span class="calendar-legend-item"><span class="calendar-legend-swatch swatch-yes"></span> Ja</span>
+      <span class="calendar-legend-item"><span class="calendar-legend-swatch swatch-maybe"></span> Vielleicht</span>
+      <span class="calendar-legend-item"><span class="calendar-legend-swatch swatch-no"></span> Nein</span>
     </span>
-    <span class="how-hint">tap again to unset</span>
+    <span class="how-hint">nochmal tippen = zurücksetzen</span>
   </div>
 
   <div class="calendar-weekdays" aria-hidden="true">
     {WEEKDAY_LABELS.map((label) => (
-      <div class={['calendar-weekday', (label === 'Sat' || label === 'Sun') && 'is-weekend'].filter(Boolean).join(' ')}>
+      <div class={['calendar-weekday', (label === 'Sa' || label === 'So') && 'is-weekend'].filter(Boolean).join(' ')}>
         {label}
       </div>
     ))}

@@ -59,14 +59,14 @@ const SIBLING_REPO_URL = 'https://github.com/Leonardboeker/pay-me-back';
     <title>{title}</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 
-    {/* Google Fonts (Syne / JetBrains Mono / Space Mono / Press Start 2P).
+    {/* Google Fonts — modern stack: Bricolage Grotesque (headlines) + DM Sans (body+labels).
         Loaded via <link> rather than CSS @import to avoid Lightning CSS
         warnings about @import-after-@layer (Tailwind v4 injects layers). */}
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;700;800&family=Space+Mono:wght@400;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap"
     />
 
     {/* Open Graph / Twitter card — shown in WhatsApp, iMessage, Slack, Twitter etc. */}
@@ -93,7 +93,7 @@ const SIBLING_REPO_URL = 'https://github.com/Leonardboeker/pay-me-back';
         align-items: center;
         justify-content: center;
         gap: 8px;
-        font-family: 'JetBrains Mono', ui-monospace, monospace;
+        font-family: var(--font-label);
         font-size: 11px;
         letter-spacing: 0.08em;
         text-transform: uppercase;
@@ -133,7 +133,7 @@ const SIBLING_REPO_URL = 'https://github.com/Leonardboeker/pay-me-back';
         align-items: center;
         justify-content: center;
         gap: 8px;
-        font-family: 'JetBrains Mono', ui-monospace, monospace;
+        font-family: var(--font-label);
         font-size: 11px;
         letter-spacing: 0.06em;
         color: var(--color-on-surface-variant, #6b5d52);
@@ -165,7 +165,7 @@ const SIBLING_REPO_URL = 'https://github.com/Leonardboeker/pay-me-back';
         border-bottom: 4px solid #2a1f1a;
         padding: 14px 16px;
         text-align: center;
-        font-family: 'JetBrains Mono', ui-monospace, monospace;
+        font-family: var(--font-label);
         color: #2a1f1a;
         z-index: 50;
       }

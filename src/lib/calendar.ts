@@ -15,8 +15,8 @@ const MONDAY_FIRST_INDEX: Record<number, number> = {
 };
 
 const MONTH_NAMES = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
+  'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
+  'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember',
 ];
 
 /** Pad a number to 2 digits with leading zero. */

@@ -92,8 +92,8 @@
   /* === Typography === */
   --font-pixel: "Press Start 2P", monospace;
   --font-headline: "Bricolage Grotesque", "Syne", "Helvetica Neue", sans-serif;
-  --font-body: "DM Sans", "Space Mono", system-ui, sans-serif;
-  --font-label: "JetBrains Mono", ui-monospace, monospace;
+  --font-body: "DM Sans", system-ui, sans-serif;
+  --font-label: "DM Sans", system-ui, sans-serif;
   --font-sans: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
 
   /* === Type scale (Stitch design.md) === */
