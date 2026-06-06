@@ -75,21 +75,27 @@ export interface RenderedEmail {
 }
 
 const MONTH_SHORT = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  'Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez',
+];
+
+const MONTH_LONG = [
+  'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
+  'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember',
 ];
 
 function fmtRangeShort(start: string, end: string): string {
-  // "Jul 12-15" if same month, "Jul 28 - Aug 2" otherwise.
+  // "9.–12. Juli" if same month, "28. Jul – 2. Aug" otherwise.
   const [ys, ms, ds] = start.split('-').map(Number);
   const [ye, me, de] = end.split('-').map(Number);
-  const sMonth = MONTH_SHORT[ms - 1] ?? String(ms);
-  const eMonth = MONTH_SHORT[me - 1] ?? String(me);
+  const sMonthShort = MONTH_SHORT[ms - 1] ?? String(ms);
+  const eMonthShort = MONTH_SHORT[me - 1] ?? String(me);
+  const sMonthLong = MONTH_LONG[ms - 1] ?? String(ms);
   if (ys === ye && ms === me) {
-    if (ds === de) return `${sMonth} ${ds}`;
-    return `${sMonth} ${ds}-${de}`;
+    if (ds === de) return `${ds}. ${sMonthLong}`;
+    return `${ds}.–${de}. ${sMonthLong}`;
   }
-  return `${sMonth} ${ds} - ${eMonth} ${de}`;
+  return `${ds}. ${sMonthShort} – ${de}. ${eMonthShort}`;
 }
 
 function fmtRangeLong(start: string, end: string): string {
@@ -129,10 +135,10 @@ function buildSubject(params: CloseSummaryParams): string {
   const dest = params.poll.destination ?? params.poll.title;
   const featured = pickFeaturedRange(params.overlap);
   if (featured) {
-    return `🎉 ${dest} is set — ${fmtRangeShort(featured.start, featured.end)}`;
+    return `🎉 ${dest} steht fest — ${fmtRangeShort(featured.start, featured.end)}`;
   }
   // Fallback when no overlap found — use poll's full date range.
-  return `📅 ${dest} — date check-in`;
+  return `📅 ${dest} — Termin noch offen`;
 }
 
 function buildHtml(params: CloseSummaryParams): string {
@@ -140,7 +146,7 @@ function buildHtml(params: CloseSummaryParams): string {
   const featured = pickFeaturedRange(params.overlap);
   const rangeShort = featured
     ? fmtRangeShort(featured.start, featured.end)
-    : 'dates to be confirmed';
+    : 'Termin noch offen';
   const rangeLong = featured ? fmtRangeLong(featured.start, featured.end) : '';
 
   const flights = params.flights ?? [];
@@ -169,7 +175,7 @@ function buildHtml(params: CloseSummaryParams): string {
     <tr>
       <td style="padding:24px 24px 8px 24px;font-family:'Helvetica Neue',Arial,sans-serif;color:#1c1b1f;">
         <h1 style="margin:0 0 12px 0;font-size:24px;line-height:1.2;font-weight:800;">
-          Hey ${esc(params.participant.name)} — ${esc(dest)} is set.
+          Hey ${esc(params.participant.name)} — ${esc(dest)} steht fest.
         </h1>
         <p style="margin:0;font-size:32px;line-height:1.1;font-weight:900;color:#6750a4;">
           ${esc(rangeShort)}
@@ -184,7 +190,7 @@ function buildHtml(params: CloseSummaryParams): string {
     <tr>
       <td style="padding:20px 24px 8px 24px;font-family:'Helvetica Neue',Arial,sans-serif;">
         <p style="margin:0 0 12px 0;font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#666;">
-          Add to your calendar
+          Zum Kalender hinzufügen
         </p>
         <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
           <tr>
@@ -215,7 +221,7 @@ function buildHtml(params: CloseSummaryParams): string {
           </tr>
         </table>
         <p style="margin:8px 0 0 0;font-size:12px;color:#888;">
-          The .ics attachment also imports natively into most calendars — open it from this email.
+          Der .ics-Anhang lässt sich auch direkt in die meisten Kalender importieren — öffne ihn einfach aus dieser Mail.
         </p>
       </td>
     </tr>
@@ -231,7 +237,7 @@ function buildHtml(params: CloseSummaryParams): string {
               <strong>${esc(f.from)}</strong> → <strong>${esc(f.to)}</strong>
               ${f.carrier ? ` · ${esc(f.carrier)}` : ''}
               ${f.priceEur ? ` · €${f.priceEur}` : ''}
-              ${f.url ? ` · <a href="${esc(f.url)}" style="color:#6750a4;">book</a>` : ''}
+              ${f.url ? ` · <a href="${esc(f.url)}" style="color:#6750a4;">buchen</a>` : ''}
             </td>
           </tr>
         `
@@ -241,7 +247,7 @@ function buildHtml(params: CloseSummaryParams): string {
       <tr>
         <td style="padding:20px 24px 8px 24px;font-family:'Helvetica Neue',Arial,sans-serif;color:#1c1b1f;">
           <h2 style="margin:0 0 12px 0;font-size:18px;font-weight:800;text-transform:uppercase;letter-spacing:0.04em;">
-            ✈️ Flights for you
+            ✈️ Flüge für dich
           </h2>
           <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
             ${rows}
@@ -260,8 +266,8 @@ function buildHtml(params: CloseSummaryParams): string {
             <td style="padding:8px 0;border-top:1px solid #eee;font-size:14px;">
               <strong>${esc(h.name)}</strong>
               ${h.area ? ` · ${esc(h.area)}` : ''}
-              ${h.pricePerNightEur ? ` · €${h.pricePerNightEur}/night` : ''}
-              ${h.url ? ` · <a href="${esc(h.url)}" style="color:#6750a4;">view</a>` : ''}
+              ${h.pricePerNightEur ? ` · €${h.pricePerNightEur}/Nacht` : ''}
+              ${h.url ? ` · <a href="${esc(h.url)}" style="color:#6750a4;">ansehen</a>` : ''}
             </td>
           </tr>
         `
@@ -271,7 +277,7 @@ function buildHtml(params: CloseSummaryParams): string {
       <tr>
         <td style="padding:20px 24px 8px 24px;font-family:'Helvetica Neue',Arial,sans-serif;color:#1c1b1f;">
           <h2 style="margin:0 0 12px 0;font-size:18px;font-weight:800;text-transform:uppercase;letter-spacing:0.04em;">
-            🏨 Hotels we shortlisted
+            🏨 Hotels in der Auswahl
           </h2>
           <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
             ${rows}
@@ -303,10 +309,10 @@ function buildHtml(params: CloseSummaryParams): string {
       <tr>
         <td style="padding:20px 24px 8px 24px;font-family:'Helvetica Neue',Arial,sans-serif;color:#1c1b1f;">
           <h2 style="margin:0 0 12px 0;font-size:18px;font-weight:800;text-transform:uppercase;letter-spacing:0.04em;">
-            🎭 Things to do
+            🎭 Aktivitäten
           </h2>
-          ${renderList('This week', activities.thisWeek ?? [])}
-          ${renderList('Always great', activities.alwaysGreat ?? [])}
+          ${renderList('Diese Woche', activities.thisWeek ?? [])}
+          ${renderList('Immer gut', activities.alwaysGreat ?? [])}
         </td>
       </tr>
     `);
@@ -318,16 +324,16 @@ function buildHtml(params: CloseSummaryParams): string {
       <td style="padding:20px 24px 8px 24px;font-family:'Helvetica Neue',Arial,sans-serif;color:#1c1b1f;">
         <div style="border:2px solid #6750a4;background:#f3edf7;padding:16px;border-radius:8px;">
           <p style="margin:0 0 8px 0;font-size:14px;font-weight:800;color:#6750a4;">
-            🔔 Reminders we'll send
+            🔔 Erinnerungen, die wir dir schicken
           </p>
           <ul style="margin:0 0 0 18px;padding:0;font-size:13px;line-height:1.7;color:#444;">
-            <li>30 days before — flight price refresh</li>
-            <li>1 week before — packing checklist</li>
-            <li>1 day before — final details</li>
-            <li>1 day after — wrap-up</li>
+            <li>30 Tage vorher — aktualisierte Flugpreise</li>
+            <li>1 Woche vorher — Packliste</li>
+            <li>1 Tag vorher — letzte Details</li>
+            <li>1 Tag danach — Nachbereitung</li>
           </ul>
           <p style="margin:8px 0 0 0;font-size:12px;color:#666;">
-            Calendar alerts are also baked into the .ics attached to this email.
+            Kalender-Erinnerungen stecken auch im .ics-Anhang dieser Mail.
           </p>
         </div>
       </td>
@@ -336,17 +342,17 @@ function buildHtml(params: CloseSummaryParams): string {
 
   // Footer
   const orgAttribution = params.organiserName
-    ? `${esc(params.organiserName)} set up this poll for ${esc(dest)}.`
-    : `Someone set up a when-we-go poll for ${esc(dest)}.`;
+    ? `${esc(params.organiserName)} diese Abstimmung für ${esc(dest)} erstellt hat`
+    : `jemand eine when-we-go-Abstimmung für ${esc(dest)} erstellt hat`;
   sections.push(`
     <tr>
       <td style="padding:24px 24px 32px 24px;font-family:'Helvetica Neue',Arial,sans-serif;color:#666;font-size:12px;line-height:1.5;">
         <hr style="border:0;border-top:1px solid #ddd;margin:0 0 16px 0;" />
         <p style="margin:0 0 8px 0;">
-          <a href="${esc(params.participantPageUrl)}" style="color:#6750a4;font-weight:700;">View your trip page →</a>
+          <a href="${esc(params.participantPageUrl)}" style="color:#6750a4;font-weight:700;">Zur Reise-Seite →</a>
         </p>
         <p style="margin:0;">
-          You're getting this because ${orgAttribution}
+          Du bekommst diese Mail, weil ${orgAttribution}.
         </p>
       </td>
     </tr>
@@ -394,7 +400,7 @@ function buildText(params: CloseSummaryParams): string {
   const featured = pickFeaturedRange(params.overlap);
   const rangeShort = featured
     ? fmtRangeShort(featured.start, featured.end)
-    : 'dates to be confirmed';
+    : 'Termin noch offen';
   const rangeLong = featured ? fmtRangeLong(featured.start, featured.end) : '';
 
   const flights = params.flights ?? [];
@@ -403,11 +409,11 @@ function buildText(params: CloseSummaryParams): string {
   const links = params.addToCalendarLinks;
 
   const out: string[] = [];
-  out.push(`Hey ${params.participant.name} — ${dest} is set.`);
+  out.push(`Hey ${params.participant.name} — ${dest} steht fest.`);
   out.push('');
-  out.push(`Dates: ${rangeShort}${rangeLong ? ` (${rangeLong})` : ''}`);
+  out.push(`Termin: ${rangeShort}${rangeLong ? ` (${rangeLong})` : ''}`);
   out.push('');
-  out.push('Add to your calendar:');
+  out.push('Zum Kalender hinzufügen:');
   out.push(`  Google:  ${links.google}`);
   out.push(`  Apple:   ${links.apple}`);
   out.push(`  Outlook: ${links.outlook}`);
@@ -415,7 +421,7 @@ function buildText(params: CloseSummaryParams): string {
   out.push('');
 
   if (flights.length > 0) {
-    out.push('Flights for you:');
+    out.push('Flüge für dich:');
     for (const f of flights) {
       const bits = [`  ${f.from} → ${f.to}`];
       if (f.carrier) bits.push(f.carrier);
@@ -427,11 +433,11 @@ function buildText(params: CloseSummaryParams): string {
   }
 
   if (hotels.length > 0) {
-    out.push('Hotels we shortlisted:');
+    out.push('Hotels in der Auswahl:');
     for (const h of hotels) {
       const bits = [`  ${h.name}`];
       if (h.area) bits.push(h.area);
-      if (h.pricePerNightEur) bits.push(`€${h.pricePerNightEur}/night`);
+      if (h.pricePerNightEur) bits.push(`€${h.pricePerNightEur}/Nacht`);
       if (h.url) bits.push(`[${h.url}]`);
       out.push(bits.join(' · '));
     }
@@ -443,25 +449,25 @@ function buildText(params: CloseSummaryParams): string {
     ...(activities.alwaysGreat ?? []),
   ];
   if (allActs.length > 0) {
-    out.push('Things to do:');
+    out.push('Aktivitäten:');
     for (const a of allActs) {
       out.push(`  - ${a.name}${a.url ? ` [${a.url}]` : ''}${a.note ? ` — ${a.note}` : ''}`);
     }
     out.push('');
   }
 
-  out.push('Reminders we will send:');
-  out.push('  - 30 days before — flight price refresh');
-  out.push('  - 1 week before — packing checklist');
-  out.push('  - 1 day before — final details');
-  out.push('  - 1 day after — wrap-up');
+  out.push('Erinnerungen, die wir dir schicken:');
+  out.push('  - 30 Tage vorher — aktualisierte Flugpreise');
+  out.push('  - 1 Woche vorher — Packliste');
+  out.push('  - 1 Tag vorher — letzte Details');
+  out.push('  - 1 Tag danach — Nachbereitung');
   out.push('');
-  out.push(`View your trip page: ${params.participantPageUrl}`);
+  out.push(`Zur Reise-Seite: ${params.participantPageUrl}`);
   out.push('');
   const orgAttribution = params.organiserName
-    ? `${params.organiserName} set up this poll for ${dest}.`
-    : `Someone set up a when-we-go poll for ${dest}.`;
-  out.push(`You're getting this because ${orgAttribution}`);
+    ? `${params.organiserName} diese Abstimmung für ${dest} erstellt hat`
+    : `jemand eine when-we-go-Abstimmung für ${dest} erstellt hat`;
+  out.push(`Du bekommst diese Mail, weil ${orgAttribution}.`);
 
   return out.join('\n');
 }
