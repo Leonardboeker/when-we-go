@@ -275,7 +275,9 @@ const WEEKDAY_LABELS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
      The cell FILL is the viewer's own vote. These small dots show OTHER
      participants' votes for the day (green/amber/red), live. A light ring
      keeps them readable on any fill colour. */
-  .cell-voter-dots {
+  /* :global() because these elements are created by JS in [token].astro —
+     Astro's scoped data-attribute would otherwise never match them. */
+  :global(.cell-voter-dots) {
     position: absolute;
     bottom: 3px;
     left: 0;
@@ -286,21 +288,40 @@ const WEEKDAY_LABELS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
     pointer-events: none;
     line-height: 0;
   }
-  .voter-dot {
+  :global(.voter-dot) {
     width: 6px;
     height: 6px;
     border-radius: 50%;
     background: #94a3b8;
     box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.85);
   }
-  .voter-dot.is-yes { background: #16a34a; }
-  .voter-dot.is-maybe { background: #f59e0b; }
-  .voter-dot.is-no { background: #dc2626; }
+  :global(.voter-dot.is-yes) { background: #16a34a; }
+  :global(.voter-dot.is-maybe) { background: #f59e0b; }
+  :global(.voter-dot.is-no) { background: #dc2626; }
 
-  /* Weekend override — voted states take over completely */
-  .cell-yes.is-weekend,
-  .cell-maybe.is-weekend,
-  .cell-no.is-weekend { background-image: none; }
+  /* Weekend override — the voted COLOUR must win over the weekend fill.
+     `.calendar-cell.is-weekend` has 2-class specificity, so single-class
+     `.cell-yes/.cell-maybe/.cell-no` lose the background unless re-asserted
+     here at higher specificity (3 classes). Without this a voted weekend day
+     showed only the faint box-shadow glow, not the fill. */
+  .calendar-cell.cell-yes.is-weekend {
+    background: #16a34a;
+    background-image: none;
+    color: #fff;
+    border-color: #15803d;
+  }
+  .calendar-cell.cell-maybe.is-weekend {
+    background: #f59e0b;
+    background-image: none;
+    color: #1c1917;
+    border-color: #d97706;
+  }
+  .calendar-cell.cell-no.is-weekend {
+    background: #fde2e2;
+    background-image: none;
+    color: #9f1239;
+    border-color: #f4a8a8;
+  }
   /* Post-close overlap badges */
   .cell-perfect .calendar-cell-badge::after { content: '✓'; color: var(--color-primary); }
   .cell-witheffort .calendar-cell-badge::after { content: '~'; color: var(--color-on-surface); }
