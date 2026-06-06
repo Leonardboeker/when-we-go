@@ -135,10 +135,17 @@
     line-height: 1;
   }
 
-  /* Hide on desktop — page has enough space to show everything */
+  /* Desktop: keep the nav visible (sections still toggle one-at-a-time, so it
+     is needed there too). Center it + cap the width so it doesn't stretch on
+     wide screens, and add subtle rounding to feel less like a phone bar. */
   @media (min-width: 768px) {
     .bottom-nav {
-      display: none;
+      max-width: 480px;
+      left: 50%;
+      right: auto;
+      transform: translateX(-50%);
+      border-radius: 16px 16px 0 0;
+      box-shadow: 0 -6px 24px rgba(15, 23, 42, 0.12);
     }
   }
 </style>
