@@ -34,7 +34,7 @@ const REQUEST_TIMEOUT_MS = 8000;
 /** Geo radius around the destination centre. */
 const RADIUS_KM = 30;
 /** How many raw events to pull before dedup/cap (TM lists many ticket variants). */
-const PAGE_SIZE = 30;
+const PAGE_SIZE = 200;
 /** Final cap on returned events after dedup. */
 const MAX_EVENTS = 8;
 
@@ -251,10 +251,47 @@ function dedupByName(items: ActivityItem[]): ActivityItem[] {
 // ─── parse a full Discovery response → deduped, sorted, capped items ──────────
 
 /**
+ * Pick up to `max` items SPREAD evenly across an already-sorted list, instead of
+ * taking the first `max` (which clusters everything at the range start). When
+ * there are <= max items we return them all. Otherwise we walk the list at an
+ * even stride so the survivors span the whole window — e.g. 40 distinct events
+ * over 3 months → ~8 events sampled across July/August/September rather than 8
+ * from the first few days. The first item is always kept; the rest are sampled
+ * at a fractional stride and the result stays in date order.
+ */
+function spreadEvenly<T>(items: T[], max: number): T[] {
+  if (max <= 0) return [];
+  if (items.length <= max) return items.slice();
+  const out: T[] = [];
+  const used = new Set<number>();
+  // Fractional stride across the full index range so picks span start→end.
+  const step = (items.length - 1) / (max - 1);
+  for (let i = 0; i < max; i++) {
+    let idx = Math.round(i * step);
+    if (idx >= items.length) idx = items.length - 1;
+    // Avoid duplicate picks when rounding collides (dense clusters).
+    while (used.has(idx) && idx < items.length - 1) idx++;
+    while (used.has(idx) && idx > 0) idx--;
+    if (used.has(idx)) continue;
+    used.add(idx);
+    out.push(items[idx]);
+  }
+  return out;
+}
+
+/**
  * Pure transform: Discovery JSON → ActivityItem[] (deduped by name, sorted by
- * date asc, capped at MAX_EVENTS). Exported so it can be unit-tested against a
- * hardcoded sample with no network. Date sort uses the raw localDate+localTime
- * ISO-ish string which sorts lexicographically for YYYY-MM-DD.
+ * date asc, then a SPREAD of up to MAX_EVENTS distinct events across the whole
+ * date range). Exported so it can be unit-tested against a hardcoded sample with
+ * no network. Date sort uses the raw localDate+localTime ISO-ish string which
+ * sorts lexicographically for YYYY-MM-DD.
+ *
+ * Why spread, not slice: for an OPEN poll the trip window isn't decided yet, so
+ * activities.ts queries the full poll dateRange (e.g. a 3-month window). Slicing
+ * the first MAX_EVENTS after a date-asc sort returned only events clustered on
+ * the range's first day(s). Sampling at an even stride gives a representative
+ * spread across the whole window. For a short (decided) window the list is
+ * usually <= MAX_EVENTS, so this is a no-op and the post-close path is unchanged.
  */
 export function parseDiscoveryResponse(
   body: TicketmasterDiscoveryResponse
@@ -278,7 +315,11 @@ export function parseDiscoveryResponse(
   const keys = new Set(deduped);
   const survivors = mapped.filter((m) => keys.has(m.item));
   survivors.sort((a, b) => a.sortKey.localeCompare(b.sortKey));
-  return survivors.map((m) => m.item).slice(0, MAX_EVENTS);
+  // Spread across the full (date-sorted) window rather than slicing the front.
+  return spreadEvenly(
+    survivors.map((m) => m.item),
+    MAX_EVENTS
+  );
 }
 
 // ─── public entrypoint ────────────────────────────────────────────────────────

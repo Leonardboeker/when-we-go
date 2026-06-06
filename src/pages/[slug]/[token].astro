@@ -161,6 +161,13 @@ const icalDownloadUrl = buildICalDownloadUrl({
         <span class="trip-closed-icon" aria-hidden="true">✅</span>
         <span id="trip-closed-text">Die Abstimmung ist beendet — hier sind die Ergebnisse.</span>
       </div>
+      {/* Open-poll preview note — shown while voting is still running so the
+          flight/hotel/activity/event cards below read as a non-final preview.
+          Replaces the old "erscheint sobald die Abstimmung endet" placeholder;
+          the IIFE toggles it (open → visible, closed → hidden). */}
+      <p class="trip-preview-note" id="trip-preview-note" hidden>
+        Vorschau — finalisiert sich, sobald der Termin steht.
+      </p>
       <p class="trip-preclose-hint" id="trip-pre-close-msg" hidden>
         ✈️ Sobald die Abstimmung endet, erscheinen hier Flüge, Hotels & Tipps.
       </p>
@@ -236,6 +243,12 @@ const icalDownloadUrl = buildICalDownloadUrl({
     let closed = false;
     let saveTimer = null;
     let pollInterval = null;
+    // Trip-tab content (flights/hotels/activities/map) is loaded lazily and at
+    // most once per "phase" so the 30s poll tick never re-hits the provider
+    // APIs. Set true after the first successful load; reset to false on close so
+    // the post-close refresh re-loads against the now-decided overlap window.
+    let tripContentLoaded = false;
+    let lastOverlapForLoad = null;
     /** @type {AbortController | null} */
     let inflightAbort = null;
     /** Phase 11: per-day group votes by name {date: [{name, state}]}, + viewer's name */
@@ -749,7 +762,12 @@ const icalDownloadUrl = buildICalDownloadUrl({
      * @param {{votes:Array<{date:string,state:string}>,closed:boolean,overlap:any,viewer?:{profile:any}}} data
      */
     function applyServerState(data) {
+      const wasClosed = closed;
       closed = !!data.closed;
+      // True only on the open -> closed transition (first refresh that reports
+      // closed). Used to force a one-time trip-content reload against the now-
+      // decided overlap, without re-fetching on every later post-close refresh.
+      const justClosed = closed && !wasClosed;
       // Phase 11: stash group votes + viewer name for live per-day dots.
       viewerName = (data.viewer && data.viewer.name) || '';
       groupVotesData = data.groupVotes || Object.create(null);
@@ -781,6 +799,10 @@ const icalDownloadUrl = buildICalDownloadUrl({
         );
         if (cell) applyCellClass(cell, v.state, changed);
       }
+      // Stash the latest overlap (post-close it's the decided window; open it's
+      // usually null) so a lazy first-open trip load can pass it to loadWeather.
+      lastOverlapForLoad = data.overlap || null;
+
       if (closed) {
         markReadOnly();
         const overlap = data.overlap;
@@ -811,11 +833,14 @@ const icalDownloadUrl = buildICalDownloadUrl({
           });
         }
         setStatus('Abstimmung beendet', '');
-        // Feature 5: closed-state banner on the Trip tab + hide pre-close hint.
+        // Feature 5: closed-state banner on the Trip tab + hide pre-close hint
+        // and the open-poll "Vorschau" note (this is the final result now).
         const closedBanner = document.getElementById('trip-closed-banner');
         const closedText = document.getElementById('trip-closed-text');
         const preCloseMsg = document.getElementById('trip-pre-close-msg');
+        const previewNote = document.getElementById('trip-preview-note');
         if (preCloseMsg) preCloseMsg.hidden = true;
+        if (previewNote) previewNote.hidden = true;
         if (closedBanner) {
           const ranges = (data.overlap && data.overlap.ranges) || [];
           const best = ranges.find((r) => r.tier === 'perfect') ||
@@ -826,12 +851,12 @@ const icalDownloadUrl = buildICalDownloadUrl({
           }
           closedBanner.hidden = false;
         }
-        // Phase 5-7: load trip content (non-blocking).
-        loadFlights(false);
-        loadHotels();
-        loadActivities();
-        // Feature 2: weather for the trip window (Open-Meteo, non-blocking).
-        loadWeather(data.overlap);
+        // Phase 5-7: (re)load trip content against the now-decided overlap
+        // window. On the open -> closed transition, force a reload even if a
+        // preview already loaded while open, so flights/hotels/activities/events
+        // reflect the final dates. Otherwise (later post-close refreshes) the
+        // normal guard keeps it a no-op.
+        loadTripContent(justClosed);
         // Auto-switch to Trip tab and show notification badge.
         if (typeof window.__switchToTripTab === 'function') {
           window.__switchToTripTab(true);
@@ -839,6 +864,15 @@ const icalDownloadUrl = buildICalDownloadUrl({
       } else {
         // Feature 7: Best week highlight (only when poll is open)
         highlightBestWeek();
+        // Open-poll PREVIEW: load the trip content (flights/hotels/activities/
+        // events + map) lazily the first time, so the Reise tab shows a live
+        // preview during voting instead of a "comes later" placeholder. Guarded
+        // so the 30s poll tick never re-hits the provider APIs.
+        const previewNote = document.getElementById('trip-preview-note');
+        const preCloseMsg = document.getElementById('trip-pre-close-msg');
+        if (previewNote) previewNote.hidden = false;
+        if (preCloseMsg) preCloseMsg.hidden = true; // replaced by the live preview
+        loadTripContent(false);
       }
 
       // Feature 8: participant progress indicator
@@ -847,6 +881,27 @@ const icalDownloadUrl = buildICalDownloadUrl({
       renderComments(data.comments);
       // Phase 11: live per-day group dots (refreshes with the 30s poll)
       renderGroupVotes();
+    }
+
+    /**
+     * Load the Reise-tab content once (flights, hotels, activities/events, the
+     * weather widget + the Leaflet map). Idempotent: a "loaded" flag stops the
+     * 30s poll tick (and repeat tab opens) from re-hitting the provider APIs.
+     * @param {boolean} force  re-load even if already loaded (used on close, to
+     *                         refresh against the now-decided overlap window).
+     */
+    function loadTripContent(force) {
+      if (tripContentLoaded && !force) return;
+      tripContentLoaded = true;
+      // The handlers resolve the date window server-side: post-close they use
+      // the decided overlap, open they fall back to the poll dateRange. So we
+      // don't pass a window here — just trigger the loads (all non-blocking).
+      loadFlights(false);
+      loadHotels();
+      loadActivities();
+      // Feature 2: weather for the trip window (Open-Meteo, non-blocking).
+      // Pass the latest overlap (post-close) or null (open -> poll start window).
+      loadWeather(lastOverlapForLoad);
     }
 
     /** Feature 7: find the Mon-Sun week with the most "yes" votes and highlight it */
@@ -2167,6 +2222,10 @@ const icalDownloadUrl = buildICalDownloadUrl({
     if (tripTabBtn) {
       tripTabBtn.addEventListener('click', function () {
         ensureLeaflet();
+        // Safety net: if the first refreshState hadn't loaded the preview yet
+        // (e.g. it raced or errored), load it now on first Reise-tab open. The
+        // guard makes this a no-op once content is already loaded.
+        loadTripContent(false);
         setTimeout(function () { if (tripMap) tripMap.invalidateSize(); }, 160);
       });
     }
@@ -2291,6 +2350,27 @@ const icalDownloadUrl = buildICalDownloadUrl({
     font-size: 15px;
     line-height: 1.6;
   }
+  /* Open-poll "Vorschau" note above the live preview cards */
+  .trip-preview-note {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 16px;
+    padding: 11px 14px;
+    background: var(--color-surface-container-low, #eef4fb);
+    border: 1px dashed var(--color-outline-variant, #cbd5e1);
+    border-radius: var(--radius-lg, 12px);
+    color: var(--color-on-surface-variant, #475569);
+    font-family: var(--font-body, 'DM Sans', system-ui, sans-serif);
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .trip-preview-note::before {
+    content: '👁';
+    font-size: 15px;
+    flex-shrink: 0;
+  }
+  .trip-preview-note[hidden] { display: none; }
   .sr-only {
     position: absolute;
     width: 1px;
