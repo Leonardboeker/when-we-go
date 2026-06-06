@@ -215,8 +215,11 @@ async function getJson<T>(url: string, label: string): Promise<T> {
  * Resolve a free-form destination to lat/lng. Fast path is the shared curated
  * table (no network); fallback is Open-Meteo's keyless geocoding API. Returns
  * null only when both miss (caller surfaces destination_too_obscure).
+ *
+ * Exported so the Ticketmaster events path (activities handler) can reuse the
+ * exact same resolution instead of geocoding the destination a second time.
  */
-async function geocodeDestination(
+export async function geocodeDestination(
   destination: string
 ): Promise<{ lat: number; lng: number } | null> {
   const local = resolveDestinationGeo(destination);

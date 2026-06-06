@@ -29,6 +29,9 @@ import {
   type ActivityCachePayload,
 } from '../lib/activities';
 import { getActivityProvider } from '../lib/activity-provider';
+import { geocodeDestination } from '../lib/activity-provider-wikimedia';
+import { fetchTicketmasterEvents } from '../lib/event-provider-ticketmaster';
+import type { ActivityItem } from '../lib/activity-provider';
 import type { Overlap } from '../lib/overlap';
 
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days per CONTEXT D-03
@@ -139,7 +142,45 @@ export async function loadActivitiesForPoll(args: {
     }
   }
 
-  const payload = pkg(result.reason, result.activities);
+  // ── Dated events (Ticketmaster) → thisWeek ────────────────────────────────
+  // The Wikimedia provider only fills `alwaysGreat` (evergreen sights). Layer
+  // the real, date-bound events that happen DURING the trip window on top as
+  // `thisWeek`. We reuse the SAME destination→coords resolution the Wikimedia
+  // path uses (geocodeDestination) so we don't geocode twice, and pass the
+  // resolved overlap/poll trip dates. Fully graceful: no key or any error →
+  // events is [] and thisWeek just stays empty (alwaysGreat still shows).
+  let events: ActivityItem[] = [];
+  if (env.WHENWEGO_TICKETMASTER_API_KEY) {
+    try {
+      const geo = await geocodeDestination(destination);
+      if (geo) {
+        events = await fetchTicketmasterEvents(
+          env,
+          geo.lat,
+          geo.lng,
+          datePair.start,
+          datePair.end
+        );
+      }
+    } catch (err) {
+      // fetchTicketmasterEvents never throws, but geocodeDestination could —
+      // swallow so the activities page is never broken by the events layer.
+      console.error('[activities] ticketmaster events failed', err);
+      events = [];
+    }
+  }
+
+  // Merge: events become thisWeek, Wikimedia sights stay alwaysGreat. When the
+  // attractions provider errored but events succeeded, still surface the events
+  // (and flip the reason to 'ok' so the UI renders them instead of an error).
+  const mergedActivities = {
+    thisWeek: events,
+    alwaysGreat: result.activities.alwaysGreat ?? [],
+  };
+  const mergedReason =
+    result.reason !== 'ok' && events.length > 0 ? 'ok' : result.reason;
+
+  const payload = pkg(mergedReason, mergedActivities);
 
   // Only cache success payloads. Don't lock in provider_error or
   // destination_too_obscure — re-try next call.

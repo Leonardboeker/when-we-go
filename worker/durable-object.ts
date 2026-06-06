@@ -54,6 +54,12 @@ export interface Env {
   // Sign up: https://tequila.kiwi.com/portal/login
   // When unset, getFlightProvider() falls back to MockFlightProvider.
   WHENWEGO_KIWI_API_KEY?: string;
+  // Ticketmaster Discovery API key — powers the dated `thisWeek` events
+  // (concerts/festivals/shows happening during the trip window) on top of the
+  // keyless Wikimedia evergreen sights. When unset, fetchTicketmasterEvents()
+  // returns [] (graceful off) and `thisWeek` is simply empty.
+  // Get one (free): https://developer.ticketmaster.com/
+  WHENWEGO_TICKETMASTER_API_KEY?: string;
 }
 
 export type VoteState = 'yes' | 'maybe' | 'no';

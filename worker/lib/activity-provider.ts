@@ -35,7 +35,7 @@ export type ActivityType =
 
 export type ActivityConfidence = 'high' | 'medium' | 'low';
 
-export type ActivitySource = 'mock' | 'claude' | 'wikimedia';
+export type ActivitySource = 'mock' | 'claude' | 'wikimedia' | 'ticketmaster';
 
 export interface ActivityItem {
   /** Display name, max 80 chars per schema. */

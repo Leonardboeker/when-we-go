@@ -1590,8 +1590,9 @@ const icalDownloadUrl = buildICalDownloadUrl({
       name.textContent = item.name;
       nameRow.appendChild(name);
       // Price badge inline with name. Wikimedia POIs carry no pricing signal,
-      // so we suppress the badge there rather than claim a misleading "Gratis".
-      if (item.source !== 'wikimedia') {
+      // and Ticketmaster events have a "Tickets →" CTA instead of an unreliable
+      // price range — suppress the badge for both rather than show noise.
+      if (item.source !== 'wikimedia' && item.source !== 'ticketmaster') {
         const priceTag = document.createElement('span');
         priceTag.style.cssText = 'font-size:12px;font-weight:700;white-space:nowrap;color:' + (item.paid ? '#0f172a' : '#16a34a');
         priceTag.textContent = item.paid ? (typeof item.priceEur === 'number' ? '€' + item.priceEur : 'Kostenpflichtig') : 'Gratis';
@@ -1604,9 +1605,17 @@ const icalDownloadUrl = buildICalDownloadUrl({
       why.textContent = item.whyOneSentence;
       body.appendChild(why);
 
+      // Dated events (Ticketmaster) lead with the DATE, made prominent so the
+      // "when" reads at a glance; evergreen sights keep the muted meta line.
+      var isEvent = item.type === 'event';
       const meta = document.createElement('p');
       meta.className = 'activity-card-meta';
-      meta.textContent = item.dateRange;
+      if (isEvent && item.dateRange) {
+        meta.textContent = '🎫 ' + item.dateRange;
+        meta.style.cssText = 'font-weight:700;color:#0066cc;font-size:12px;';
+      } else {
+        meta.textContent = item.dateRange;
+      }
       body.appendChild(meta);
 
       if (item.confidence === 'medium') {
@@ -1626,7 +1635,10 @@ const icalDownloadUrl = buildICalDownloadUrl({
       actions.style.cssText = 'display:flex;gap:12px;align-items:center;margin-top:6px;';
 
       const seeLabel = document.createElement('span');
-      seeLabel.textContent = item.link ? 'Ansehen →' : (item.bookingUrl ? 'Mehr Info →' : 'Auf Karte →');
+      // Events link to a ticket page → "Tickets →"; sights → "Ansehen →".
+      seeLabel.textContent = isEvent && item.link
+        ? 'Tickets →'
+        : (item.link ? 'Ansehen →' : (item.bookingUrl ? 'Mehr Info →' : 'Auf Karte →'));
       seeLabel.style.cssText = 'font-size:12px;font-weight:600;color:#0066cc;';
       actions.appendChild(seeLabel);
 
