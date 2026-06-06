@@ -787,6 +787,15 @@ const icalDownloadUrl = buildICalDownloadUrl({
         if (emailEl && profile.email) emailEl.value = profile.email;
         if (airportEl && profile.homeAirport) airportEl.value = profile.homeAirport;
         if (cityEl && profile.homeCity) cityEl.value = profile.homeCity;
+        // Bug fix: also pre-populate budget radio + interest checkboxes from
+        // the saved profile — otherwise these reset to defaults on reload
+        // even though the values ARE persisted server-side.
+        const budgetVal = profile.budgetMaxEur ? String(profile.budgetMaxEur) : '';
+        const budgetRadios = document.querySelectorAll('input[name="budgetMaxEur"]');
+        budgetRadios.forEach(function (r) { r.checked = r.value === budgetVal; });
+        const savedInterests = Array.isArray(profile.interests) ? profile.interests : [];
+        const interestBoxes = document.querySelectorAll('input[name="interests"]');
+        interestBoxes.forEach(function (b) { b.checked = savedInterests.indexOf(b.value) !== -1; });
       }
 
       for (const v of data.votes || []) {
