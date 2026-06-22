@@ -54,12 +54,19 @@ export async function handleAdminSendVoteReminder(
   // the lock instead of fanning out a second time.
   await stub.setMeta('last_admin_vote_reminder_at', String(Date.now()));
 
-  const voterStatus = (await stub.getVoterStatus()) as Array<{
+  // BUG FIX: vote_history.vote_count counts CLICK ACTIONS (set + unset both
+  // increment), so a participant who tapped a day and untapped it shows
+  // vote_count > 0 yet has no live vote. Use the real votes table instead —
+  // "has at least one active yes/maybe" is the truthful "did they vote".
+  const allVotes = (await stub.getAllVotes()) as Array<{
     token: string;
-    vote_count: number;
+    date: string;
+    state: 'yes' | 'maybe' | 'no';
   }>;
   const votedTokens = new Set(
-    voterStatus.filter((v) => v.vote_count > 0).map((v) => v.token)
+    allVotes
+      .filter((v) => v.state === 'yes' || v.state === 'maybe')
+      .map((v) => v.token)
   );
 
   const allProfiles = (await stub.getAllProfiles()) as Array<

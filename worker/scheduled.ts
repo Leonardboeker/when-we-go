@@ -269,12 +269,19 @@ async function pollVoteReminderCheck(
       // Mark as sent immediately to prevent parallel cron ticks from double-sending.
       await stub.setMeta('poll_vote_reminder_sent', String(now));
 
-      // Get voter status to find who hasn't voted
-      const voterStatus = (await stub.getVoterStatus()) as Array<{
+      // BUG FIX: vote_history.vote_count counts CLICK ACTIONS (set+unset both
+      // increment), so the same fix the admin endpoint uses applies here —
+      // measure "actually voted" via the live votes table, not history.
+      const allVotes = (await stub.getAllVotes()) as Array<{
         token: string;
-        vote_count: number;
+        date: string;
+        state: 'yes' | 'maybe' | 'no';
       }>;
-      const votedTokens = new Set(voterStatus.filter((v) => v.vote_count > 0).map((v) => v.token));
+      const votedTokens = new Set(
+        allVotes
+          .filter((v) => v.state === 'yes' || v.state === 'maybe')
+          .map((v) => v.token)
+      );
 
       // Get profiles for email addresses
       const allProfiles = (await stub.getAllProfiles()) as Array<

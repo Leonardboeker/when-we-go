@@ -32,14 +32,16 @@ export async function handlePoll(
     env.WHENWEGO_POLL_DO.idFromName(slug)
   ) as unknown as DurableObjectStub<WhenWeGoPollDO>;
 
-  const [votes, closedAtRaw, overlapCacheRaw, history, profile, comments, allVotes] = await Promise.all([
+  // history (stub.getVoterStatus) was used for vote_history.vote_count, but
+  // that counted click actions, not live votes. We compute the real per-token
+  // count from allVotes below; keep getVoterStatus out of the parallel fetch.
+  const [votes, closedAtRaw, overlapCacheRaw, profile, comments, allVotes] = await Promise.all([
     stub.getVotesForToken(token),
     stub.getMeta('closed_at'),
     stub.getMeta('overlap_cache'),
-    stub.getVoterStatus(),
     stub.getProfile(token),
     stub.getComments(), // #6
-    stub.getAllVotes(), // Phase 11: live group availability
+    stub.getAllVotes(), // Phase 11: live group availability + voterStatus source
   ]);
 
   const closed = closedAtRaw !== null;
@@ -55,19 +57,22 @@ export async function handlePoll(
     }
   }
 
-  const viewerHistory = history.find((h) => h.token === token);
-
   // Build a voterStatus summary: one entry per participant, with voteCount.
-  // We only expose voteCount (not dates/states) so no private data leaks.
-  const voterStatusByToken = new Map(
-    (history as Array<{ token: string; vote_count: number }>).map((h) => [
-      h.token,
-      h.vote_count,
-    ])
-  );
+  // BUG FIX: vote_history.vote_count counts CLICK ACTIONS (set + unset both
+  // increment), so a participant who tapped a day and untapped it shows as
+  // "voted" even though they have no live vote. The UI's "X von 4 haben
+  // abgestimmt" must reflect ACTUAL engagement — count their live yes/maybe
+  // entries instead. (Keep "voteCount" name for API compat.) We still only
+  // expose the count, not dates/states.
+  const liveCountByToken = new Map<string, number>();
+  for (const v of allVotes as VoteRecord[]) {
+    if (v.state === 'yes' || v.state === 'maybe') {
+      liveCountByToken.set(v.token, (liveCountByToken.get(v.token) ?? 0) + 1);
+    }
+  }
   const voterStatus = poll.participants.map((p) => ({
     name: p.name,
-    voteCount: voterStatusByToken.get(p.token) ?? 0,
+    voteCount: liveCountByToken.get(p.token) ?? 0,
   }));
 
   // Phase 11: live group availability — every participant's vote per day, by
@@ -95,7 +100,8 @@ export async function handlePoll(
       },
       viewer: {
         name: participant.name,
-        voteCount: viewerHistory?.vote_count ?? 0,
+        // Same bug fix: live count of yes/maybe, not history clicks.
+        voteCount: liveCountByToken.get(token) ?? 0,
         // Phase 4: own profile only — NEVER include other participants' profiles.
         profile: profile ?? null,
       },
