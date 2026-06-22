@@ -41,6 +41,7 @@ import { handleIcal, handlePublicIcal } from './handlers/ical';
 import { handleAdminResendSummary } from './handlers/admin-resend-summary';
 import { handleAdminReminderStatus } from './handlers/admin-reminders';
 import { handleAdminSendReminder } from './handlers/admin-send-reminder';
+import { handleAdminSendVoteReminder } from './handlers/admin-send-vote-reminder';
 import { handleAdminClearReminder } from './handlers/admin-clear-reminder';
 import { handleAdminCostSplit } from './handlers/admin-cost-split';
 import { handleAdminExportPaymeback } from './handlers/admin-export-paymeback';
@@ -109,6 +110,9 @@ router.get('/api/admin/reminder-status', (req, env, ctx) =>
 );
 router.post('/api/admin/send-reminder', (req, env, ctx) =>
   handleAdminSendReminder(req, env as Env, ctx)
+);
+router.post('/api/admin/send-vote-reminder', (req, env, ctx) =>
+  handleAdminSendVoteReminder(req, env as Env, ctx)
 );
 router.post('/api/admin/clear-reminder', (req, env, ctx) =>
   handleAdminClearReminder(req, env as Env, ctx)

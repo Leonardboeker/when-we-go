@@ -45,14 +45,21 @@ const closeDateShort = new Date(pollCloseAt).toLocaleString('de-DE', {
     Abstimmung endet {closeDateShort}
   </p>
 
-  {/* Countdown badge */}
-  <div class={['poll-countdown', closed && 'poll-countdown--closed'].filter(Boolean).join(' ')}>
+  {/* Countdown badge — daysUntil(pollCloseAt) is computed at BUILD TIME, so
+       without this client-side updater the number freezes on the day the
+       static page was built. data-poll-close drives a tiny IIFE below that
+       overrides the SSR number on load + on tab-focus / day-flip. */}
+  <div
+    class={['poll-countdown', closed && 'poll-countdown--closed'].filter(Boolean).join(' ')}
+    data-poll-countdown
+    data-poll-close={pollCloseAt}
+  >
     {closed ? (
-      <span class="poll-countdown-label">Abstimmung beendet</span>
+      <span class="poll-countdown-label" data-poll-countdown-label>Abstimmung beendet</span>
     ) : (
       <>
-        <span class="poll-countdown-num">{days}</span>
-        <span class="poll-countdown-label">Tag{days === 1 ? '' : 'e'} zum Abstimmen</span>
+        <span class="poll-countdown-num" data-poll-countdown-num>{days}</span>
+        <span class="poll-countdown-label" data-poll-countdown-label>Tag{days === 1 ? '' : 'e'} zum Abstimmen</span>
       </>
     )}
   </div>
@@ -167,3 +174,42 @@ const closeDateShort = new Date(pollCloseAt).toLocaleString('de-DE', {
     color: #475569;
   }
 </style>
+
+<script is:inline>
+  /* Live countdown — recomputes days-until-close on load, on tab focus, and
+     once per hour. Without this the SSR number froze at the build-day value. */
+  (function () {
+    var root = document.querySelector('[data-poll-countdown]');
+    if (!root) return;
+    var iso = root.getAttribute('data-poll-close');
+    if (!iso) return;
+    var closeMs = Date.parse(iso);
+    if (!isFinite(closeMs)) return;
+
+    function recompute() {
+      var nowMs = Date.now();
+      var msLeft = closeMs - nowMs;
+      var days = Math.max(0, Math.ceil(msLeft / 86400000));
+      var closed = msLeft <= 0;
+
+      var numEl = root.querySelector('[data-poll-countdown-num]');
+      var labelEl = root.querySelector('[data-poll-countdown-label]');
+
+      if (closed) {
+        root.classList.add('poll-countdown--closed');
+        if (numEl) numEl.remove();
+        if (labelEl) labelEl.textContent = 'Abstimmung beendet';
+        return;
+      }
+      root.classList.remove('poll-countdown--closed');
+      if (numEl) numEl.textContent = String(days);
+      if (labelEl) labelEl.textContent = (days === 1 ? 'Tag' : 'Tage') + ' zum Abstimmen';
+    }
+
+    recompute();
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible') recompute();
+    });
+    setInterval(recompute, 60 * 60 * 1000); // hourly fallback for left-open tabs
+  })();
+</script>
