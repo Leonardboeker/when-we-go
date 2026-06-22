@@ -33,6 +33,27 @@ export async function handleAdminSendVoteReminder(
     return errorResponse('Poll is already closed', 409, req, env);
   }
 
+  // Idempotency lock: refuse a second click within 5 min. Without this a
+  // double-click would dispatch every email twice, because ctx.waitUntil is
+  // fire-and-forget and setMeta below only runs once at the end of the loop.
+  const COOLDOWN_MS = 5 * 60 * 1000;
+  const lastAt = await stub.getMeta('last_admin_vote_reminder_at');
+  const lastAtNum = lastAt ? parseInt(lastAt as string, 10) : 0;
+  if (lastAtNum && Date.now() - lastAtNum < COOLDOWN_MS) {
+    const secondsLeft = Math.ceil(
+      (COOLDOWN_MS - (Date.now() - lastAtNum)) / 1000
+    );
+    return errorResponse(
+      `Reminder was sent ${Math.round((Date.now() - lastAtNum) / 1000)}s ago. Try again in ${secondsLeft}s.`,
+      429,
+      req,
+      env
+    );
+  }
+  // Mark the cooldown BEFORE dispatching, so a concurrent second request hits
+  // the lock instead of fanning out a second time.
+  await stub.setMeta('last_admin_vote_reminder_at', String(Date.now()));
+
   const voterStatus = (await stub.getVoterStatus()) as Array<{
     token: string;
     vote_count: number;

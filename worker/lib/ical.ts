@@ -94,7 +94,11 @@ export function buildICalForPoll(input: ICalEventInput): string {
     'VERSION:2.0',
     'PRODID:-//when-we-go//EN',
     'CALSCALE:GREGORIAN',
-    'METHOD:REQUEST',
+    // METHOD:PUBLISH (not REQUEST) — REQUEST renders RSVP buttons in Gmail /
+    // Apple Mail. Yes/No clicks then bounce because there is no inbox at the
+    // ORGANIZER address (noreply@…) and the recipient gets a confusing NDR.
+    // PUBLISH marks this as an informational invite to import, no reply.
+    'METHOD:PUBLISH',
     'BEGIN:VEVENT',
     `UID:${input.uid}`,
     `DTSTAMP:${formatICalDateTime(new Date())}`,

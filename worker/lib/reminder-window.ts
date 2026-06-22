@@ -19,6 +19,13 @@ import type { ReminderType } from '../durable-object';
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
 const WINDOW_HALF_MS = HOUR_MS; // ±1h envelope around the trigger
+// Berlin-friendly time-of-day for reminder emails. The trip-start ISO is
+// interpreted as midnight UTC; adding this offset moves the trigger to 10:00
+// Berlin (CEST=+02:00 -> 08:00 UTC; CET=+01:00 -> 09:00 UTC). 8h is a deliberate
+// middle-ground so Papa sees the email at breakfast in both seasons, never at
+// 03:00. UI/email copy stays "30 days before / 1 day before"; the small
+// drift inside the day is invisible to recipients.
+const BERLIN_BREAKFAST_OFFSET_MS = 8 * HOUR_MS;
 
 const OFFSET_DAYS: Record<ReminderType, number> = {
   'T-30': -30,
@@ -41,7 +48,7 @@ export function reminderTriggerMs(
 ): number {
   const start = parseTripStartMs(tripStartIso);
   if (Number.isNaN(start)) return NaN;
-  return start + OFFSET_DAYS[type] * DAY_MS;
+  return start + OFFSET_DAYS[type] * DAY_MS + BERLIN_BREAKFAST_OFFSET_MS;
 }
 
 /**

@@ -237,12 +237,15 @@ const WEEKDAY_LABELS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
   }
   /* ── Vote state visuals — universally readable: green/amber/red ── */
 
-  /* YES — solid green: "I'm available" */
+  /* YES — solid green: "I'm available".
+     Background darkened from #15803d (3.13:1 vs white = WCAG fail for 14px)
+     to #15803d (4.7:1 = WCAG AA). Matters most for older eyes scanning the
+     month at a glance. */
   .cell-yes {
-    background: #16a34a;
+    background: #15803d;
     color: #fff;
-    border-color: #15803d;
-    box-shadow: 0 1px 6px rgba(22, 163, 74, 0.35);
+    border-color: #14532d;
+    box-shadow: 0 1px 6px rgba(21, 128, 61, 0.35);
     font-weight: 700;
   }
 
@@ -295,7 +298,7 @@ const WEEKDAY_LABELS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
     background: #94a3b8;
     box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.85);
   }
-  :global(.voter-dot.is-yes) { background: #16a34a; }
+  :global(.voter-dot.is-yes) { background: #15803d; }
   :global(.voter-dot.is-maybe) { background: #f59e0b; }
   :global(.voter-dot.is-no) { background: #dc2626; }
 
@@ -305,7 +308,7 @@ const WEEKDAY_LABELS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
      here at higher specificity (3 classes). Without this a voted weekend day
      showed only the faint box-shadow glow, not the fill. */
   .calendar-cell.cell-yes.is-weekend {
-    background: #16a34a;
+    background: #15803d;
     background-image: none;
     color: #fff;
     border-color: #15803d;
@@ -353,7 +356,7 @@ const WEEKDAY_LABELS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 
   /* Feature 7: best-week highlight */
   .cell-best-week {
-    box-shadow: inset 0 0 0 2px #16a34a !important;
+    box-shadow: inset 0 0 0 2px #15803d !important;
   }
 
   /* ── How-it-works bar ── */
@@ -409,7 +412,7 @@ const WEEKDAY_LABELS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
     border: 1.5px solid transparent;
     flex-shrink: 0;
   }
-  .swatch-yes   { background: #16a34a; border-color: #15803d; }
+  .swatch-yes   { background: #15803d; border-color: #15803d; }
   .swatch-maybe { background: #f59e0b; border-color: #d97706; }
   .swatch-no    { background: #fee2e2; border-color: #fca5a5; }
 
@@ -451,7 +454,7 @@ const WEEKDAY_LABELS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
   /* Feature 6: save-state feedback */
   .calendar-status-msg[data-kind='saving'] { color: var(--color-on-surface-variant); }
   .calendar-status-msg[data-kind='saved'] {
-    color: #16a34a;
+    color: #15803d;
     font-weight: 700;
   }
   .calendar-status-msg[data-kind='error'] {

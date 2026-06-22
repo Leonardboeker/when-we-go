@@ -62,8 +62,8 @@ const router = new Router();
 
 router.get('/api/health', (req, _env, _ctx) => {
   const env = _env as Env;
-  // Phase number reflects total shipped phases (Phase 5/6/7 land AFTER 10).
-  return jsonResponse({ ok: true, phase: 13 }, { status: 200 }, req, env);
+  // Plain liveness probe — don't leak internal phase / version markers.
+  return jsonResponse({ ok: true }, { status: 200 }, req, env);
 });
 
 router.get('/api/poll', (req, env, ctx) =>
@@ -179,13 +179,10 @@ export default {
       const matched = await router.handle(req, env, ctx);
       if (matched) return matched;
     } catch (err) {
+      // Log the real error server-side, but never leak the message (which can
+      // contain provider responses, SQL fragments, stack traces) to clients.
       console.error('[worker] handler error', err);
-      return errorResponse(
-        err instanceof Error ? err.message : 'Internal error',
-        500,
-        req,
-        env
-      );
+      return errorResponse('Internal error', 500, req, env);
     }
 
     return errorResponse('Not found', 404, req, env);

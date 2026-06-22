@@ -2174,19 +2174,19 @@ const icalDownloadUrl = buildICalDownloadUrl({
       let kind = 'ok';
       if (perfect.length > 0) {
         const top = perfect[0];
-        msg = '🎉 Best dates: ' + top.start + ' → ' + top.end + ' (' + top.length + ' days)';
+        msg = '🎉 Beste Daten: ' + top.start + ' → ' + top.end + ' (' + top.length + ' Tage)';
       } else if (withEffort.length > 0) {
         const top = withEffort[0];
-        msg = '✨ With a little effort: ' + top.start + ' → ' + top.end + ' (' + top.length + ' days) — almost everyone can make it';
+        msg = '✨ Mit ein bisschen Effort: ' + top.start + ' → ' + top.end + ' (' + top.length + ' Tage) — fast alle können';
       } else if (oneShort.length > 0) {
         // Feature 3: graceful fallback — no date worked for everyone, but
         // suggest the window where the fewest people are missing.
         const top = oneShort.slice().sort((a, b) => b.length - a.length)[0];
-        msg = '🤏 No date worked for all — but ' + top.start + ' → ' + top.end +
-          ' is closest (just one person short). Worth a group chat?';
+        msg = '🤏 Kein Datum hat für alle geklappt — aber ' + top.start + ' → ' + top.end +
+          ' wäre am nächsten dran (nur eine Person fehlt). Eine Runde im Familien-Chat?';
         kind = 'warn';
       } else {
-        msg = '😕 No overlapping dates yet. Try nudging people to add more "maybe" days, or pick a new window together.';
+        msg = '😕 Noch kein gemeinsames Datum gefunden. Ein paar mehr „Vielleicht"-Tage könnten helfen — oder ein neues Fenster zusammen wählen.';
         kind = 'warn';
       }
       summaryTextEl.textContent = msg;
