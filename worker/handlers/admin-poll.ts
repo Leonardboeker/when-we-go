@@ -75,9 +75,20 @@ export async function handleAdminPoll(
   }
 
   // Build voter status — join with poll.participants for names.
-  const statusByToken = new Map(
+  // history (vote_history) still tells us first/last click times — useful in
+  // the admin UI. But hasVoted + voteCount must come from the LIVE votes
+  // table (yes+maybe rows) because vote_history.vote_count counts click
+  // actions (set+unset both increment) and would show a 0-actual-votes user
+  // as 'VOTED'. Same bug we fixed in handlers/poll.ts.
+  const historyByToken = new Map(
     (voterStatus as VoterStatusRow[]).map((s) => [s.token, s])
   );
+  const liveCountByToken = new Map<string, number>();
+  for (const v of allVotes as VoteRow[]) {
+    if (v.state === 'yes' || v.state === 'maybe') {
+      liveCountByToken.set(v.token, (liveCountByToken.get(v.token) ?? 0) + 1);
+    }
+  }
   // Phase 4: index profiles by token for the profileComplete flag.
   // We expose only the boolean — the actual email/airport stay DO-side
   // (privacy: organiser doesn't need to see participants' personal data).
@@ -88,15 +99,16 @@ export async function handleAdminPoll(
     ])
   );
   const voterRows = poll.participants.map((p) => {
-    const s = statusByToken.get(p.token);
+    const h = historyByToken.get(p.token);
+    const liveCount = liveCountByToken.get(p.token) ?? 0;
     const prof = profileByToken.get(p.token);
     return {
       name: p.name,
       token: p.token,
-      hasVoted: !!s,
-      firstVotedAt: s?.first_voted_at ?? null,
-      lastVotedAt: s?.last_voted_at ?? null,
-      voteCount: s?.vote_count ?? 0,
+      hasVoted: liveCount > 0,
+      firstVotedAt: h?.first_voted_at ?? null,
+      lastVotedAt: h?.last_voted_at ?? null,
+      voteCount: liveCount,
       profileComplete: isProfileComplete(prof ?? null),
     };
   });
